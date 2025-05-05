@@ -1,0 +1,492 @@
+[
+  {
+    "name": "GARAGE DE L'ILE SAINT LOUIS",
+    "nafCode": "45.20A",
+    "latitude": 48.85042899999999,
+    "longitude": 2.359589000000001,
+    "address": "5 BOULEVARD HENRI IV, 75004 PARIS"
+  },
+  {
+    "name": "GARAGE STEVEN",
+    "nafCode": "45.20A",
+    "latitude": 48.847276,
+    "longitude": 2.341854000000001,
+    "address": "22 RUE SOUFFLOT, 75005 PARIS"
+  },
+  {
+    "name": "PARKING GARAGE CENTRAL",
+    "nafCode": "45.20A",
+    "latitude": 48.87496299999998,
+    "longitude": 2.341582,
+    "address": "4 RUE BUFFAULT, 75009 PARIS"
+  },
+  {
+    "name": "ATOUT SERVICES",
+    "nafCode": "45.20A",
+    "latitude": 48.865229,
+    "longitude": 2.3367070000000005,
+    "address": "28 RUE DE RICHELIEU, 75001 PARIS"
+  },
+  {
+    "name": "A.C.S AUTOCLEAN SERVICE",
+    "nafCode": "45.20A",
+    "latitude": 48.874285,
+    "longitude": 2.329545,
+    "address": "PARKING PRINTEMPS, 98 RUE DE PROVENCE, 75009 PARIS"
+  },
+  {
+    "name": "A.C.S AUTOCLEAN SERVICE",
+    "nafCode": "45.20A",
+    "latitude": 48.86914599999999,
+    "longitude": 2.341200000000001,
+    "address": "PARKING BOURSE, PLACE DE LA BOURSE, 75002 PARIS"
+  },
+  {
+    "name": "A.C.S AUTOCLEAN SERVICE",
+    "nafCode": "45.20A",
+    "latitude": 48.86738699999999,
+    "longitude": 2.331685000000001,
+    "address": "PARKING MARCHE ST HONORE, 39 PLACE DU MARCHE SAINT-HONORE, 75001 PARIS"
+  },
+  {
+    "name": "A.C.S AUTOCLEAN SERVICE",
+    "nafCode": "45.20A",
+    "latitude": 48.865704999999984,
+    "longitude": 2.321333,
+    "address": "PARKING CONCORDE, PLACE DE LA CONCORDE, 75008 PARIS"
+  },
+  {
+    "name": "DOM AUTO",
+    "nafCode": "45.20A",
+    "latitude": 48.85254299999998,
+    "longitude": 2.3602700000000008,
+    "address": "24-26, 24 QUAI DES CELESTINS, 75004 PARIS"
+  },
+  {
+    "name": "LAVAGE 147",
+    "nafCode": "45.20A",
+    "latitude": 48.85439599999999,
+    "longitude": 2.3047700000000004,
+    "address": "PARC STATIONNEMENT JOFFRE, 2 PLACE JOFFRE, 75007 PARIS"
+  },
+  {
+    "name": "JET FUN",
+    "nafCode": "45.20A",
+    "latitude": 48.84691999999999,
+    "longitude": 2.348825000000001,
+    "address": "16 RUE DESCARTES, 75005 PARIS"
+  },
+  {
+    "name": "CARGLASS PARE-BRISE ST-DENIS-LES-SENS",
+    "nafCode": "45.20A",
+    "latitude": 48.872658,
+    "longitude": 2.328852,
+    "address": "RUE DE PARIS LIEUDIT LE PRE AUBERT, 89100 SAINT-DENIS-LES-SENS"
+  },
+  {
+    "name": "GARAGE MERITE",
+    "nafCode": "45.20A",
+    "latitude": 48.87618899999999,
+    "longitude": 2.350226,
+    "address": "7 RUE DES MESSAGERIES, 75010 PARIS"
+  },
+  {
+    "name": "SARL BERITE",
+    "nafCode": "45.20A",
+    "latitude": 48.847439,
+    "longitude": 2.324299000000001,
+    "address": "4 RUE DE BERITE, 75006 PARIS"
+  },
+  {
+    "name": "LES EXPERTS DU PNEU",
+    "nafCode": "45.20A",
+    "latitude": 48.87328699999998,
+    "longitude": 2.3254600000000005,
+    "address": "38 RUE DES MATHURINS, 75008 PARIS"
+  },
+  {
+    "name": "CRYSALID",
+    "nafCode": "45.20A",
+    "latitude": 48.86864699999998,
+    "longitude": 2.312689,
+    "address": "CHEZ VINCI PARK, 18 AVENUE DES CHAMPS ELYSEES, 75008 PARIS"
+  },
+  {
+    "name": "CHEIKH LAVAGE",
+    "nafCode": "45.20A",
+    "latitude": 48.865704999999984,
+    "longitude": 2.321333,
+    "address": "PARKING DE LA CONCORDE, PLACE DE LA CONCORDE, 75008 PARIS"
+  },
+  {
+    "name": "STATION MECA VOLTAIRE",
+    "nafCode": "45.20A",
+    "latitude": 48.86347199999999,
+    "longitude": 2.370275,
+    "address": "42 BOULEVARD VOLTAIRE, 75011 PARIS"
+  },
+  {
+    "name": "REMORQUAGE SARL",
+    "nafCode": "45.20A",
+    "latitude": 48.84555099999998,
+    "longitude": 2.351861000000001,
+    "address": "42 RUE MONGE, 75005 PARIS"
+  },
+  {
+    "name": "ALLO REMORQUAGE",
+    "nafCode": "45.20A",
+    "latitude": 48.87002099999998,
+    "longitude": 2.348105,
+    "address": "41 RUE DE LA LUNE, 75002 PARIS"
+  },
+  {
+    "name": "WASHIBOO",
+    "nafCode": "45.20A",
+    "latitude": 48.86279999999999,
+    "longitude": 2.340974000000001,
+    "address": "23-25, 23 RUE JEAN-JACQUES ROUSSEAU, 75001 PARIS"
+  },
+  {
+    "name": "MONVOITURIER.COM",
+    "nafCode": "45.20A",
+    "latitude": 48.86729299999998,
+    "longitude": 2.326455,
+    "address": "259 RUE SAINT-HONORE, 75001 PARIS"
+  },
+  {
+    "name": "LA CLEANIQUE",
+    "nafCode": "45.20A",
+    "latitude": 48.86898899999998,
+    "longitude": 2.33115,
+    "address": "10 RUE DE LA PAIX, 75002 PARIS"
+  },
+  {
+    "name": "SYSTEME BIKE",
+    "nafCode": "45.20A",
+    "latitude": 48.865534,
+    "longitude": 2.3656370000000004,
+    "address": "40 BOULEVARD DU TEMPLE, 75011 PARIS"
+  },
+  {
+    "name": "",
+    "nafCode": "45.20A",
+    "latitude": 48.86703899999996,
+    "longitude": 2.3496360000000007,
+    "address": "REAUMUR SAINT DENIS, 40 RUE DUSSOUBS, 75002 PARIS"
+  },
+  {
+    "name": "AUTOPARK",
+    "nafCode": "45.20A",
+    "latitude": 48.87959499999999,
+    "longitude": 2.3435150000000005,
+    "address": "44 RUE RODIER, 75009 PARIS"
+  },
+  {
+    "name": "AUTO-HOME",
+    "nafCode": "45.20A",
+    "latitude": 48.85199599999998,
+    "longitude": 2.317091000000001,
+    "address": "42 RUE BARBET DE JOUY, 75007 PARIS"
+  },
+  {
+    "name": "ESPACE CLEAN AUTO PARIS SARL",
+    "nafCode": "45.20A",
+    "latitude": 48.87732899999999,
+    "longitude": 2.3462700000000005,
+    "address": "8 RUE ROCHAMBEAU, 75009 PARIS"
+  },
+  {
+    "name": "L.M. AUTO",
+    "nafCode": "45.20A",
+    "latitude": 48.86099499999998,
+    "longitude": 2.3813700000000004,
+    "address": "32 RUE SAINT-MAUR, 75011 PARIS"
+  },
+  {
+    "name": "",
+    "nafCode": "45.20A",
+    "latitude": 48.847276,
+    "longitude": 2.341854000000001,
+    "address": "22 RUE SOUFFLOT, 75005 PARIS"
+  },
+  {
+    "name": "AMARO ET VOUS",
+    "nafCode": "45.20A",
+    "latitude": 48.866075,
+    "longitude": 2.329477,
+    "address": "229 RUE SAINT-HONORE, 75001 PARIS"
+  },
+  {
+    "name": "OMNIUM CIAL ELECTRICITE ET RADIO",
+    "nafCode": "45.20A",
+    "latitude": 48.877103,
+    "longitude": 2.3518370000000006,
+    "address": "42 RUE DE CHABROL, 75010 PARIS"
+  },
+  {
+    "name": "SOCIETE DU GRAND GARAGE BRETEUIL",
+    "nafCode": "45.20A",
+    "latitude": 48.848379,
+    "longitude": 2.3112610000000005,
+    "address": "68 AVENUE DE BRETEUIL, 75007 PARIS"
+  },
+  {
+    "name": "CARROSSERIE DE JEMMAPES",
+    "nafCode": "45.20A",
+    "latitude": 48.86397099999999,
+    "longitude": 2.378406,
+    "address": "83 RUE SAINT-MAUR, 75011 PARIS"
+  },
+  {
+    "name": "TACTIM",
+    "nafCode": "45.20A",
+    "latitude": 48.84332399999998,
+    "longitude": 2.337957,
+    "address": "5 RUE CAROLINE ET WILLIAM HERSCHEL, 75006 PARIS"
+  },
+  {
+    "name": "GARAGE DUQUESNE",
+    "nafCode": "45.20A",
+    "latitude": 48.852544,
+    "longitude": 2.3091790000000003,
+    "address": "25 AVENUE DUQUESNE, 75007 PARIS"
+  },
+  {
+    "name": "LAVAGE DU ROND POINT",
+    "nafCode": "45.20A",
+    "latitude": 48.86864699999998,
+    "longitude": 2.312689,
+    "address": "18 AVENUE DES CHAMPS ELYSEES, 75008 PARIS"
+  },
+  {
+    "name": "BESPOKE AUTO SPA",
+    "nafCode": "45.20A",
+    "latitude": 48.853865999999975,
+    "longitude": 2.308059000000001,
+    "address": "21 AVENUE DE TOURVILLE, 75007 PARIS"
+  },
+  {
+    "name": "",
+    "nafCode": "45.20A",
+    "latitude": 48.864913,
+    "longitude": 2.375616,
+    "address": "54-56, 54 AVENUE DE LA REPUBLIQUE, 75011 PARIS"
+  },
+  {
+    "name": "PROWASH SERVICE",
+    "nafCode": "45.20A",
+    "latitude": 48.86864699999998,
+    "longitude": 2.312689,
+    "address": "18 AVENUE DES CHAMPS ELYSEES, 75008 PARIS"
+  },
+  {
+    "name": "KM-AUTO",
+    "nafCode": "45.20A",
+    "latitude": 48.86866499999999,
+    "longitude": 2.3477900000000003,
+    "address": "4 RUE POISSONNIERE, 75002 PARIS"
+  },
+  {
+    "name": "JOFFE AUTO 92",
+    "nafCode": "45.20A",
+    "latitude": 48.86621399999999,
+    "longitude": 2.3291980000000008,
+    "address": "231 RUE SAINT-HONORE, 75001 PARIS"
+  },
+  {
+    "name": "GP GROUP MOTOR",
+    "nafCode": "45.20A",
+    "latitude": 48.864089999999976,
+    "longitude": 2.3799520000000003,
+    "address": "86 AVENUE DE LA REPUBLIQUE, 75011 PARIS"
+  },
+  {
+    "name": "MWPI",
+    "nafCode": "45.20A",
+    "latitude": 48.87230999999999,
+    "longitude": 2.33594,
+    "address": "13-15, 13 RUE TAITBOUT, 75009 PARIS"
+  },
+  {
+    "name": "MWPI",
+    "nafCode": "45.20A",
+    "latitude": 48.86277799999999,
+    "longitude": 2.350830000000001,
+    "address": "52 BOULEVARD DE SEBASTOPOL, 75003 PARIS"
+  },
+  {
+    "name": "",
+    "nafCode": "45.20A",
+    "latitude": 48.86397602349519,
+    "longitude": 2.365210039760931,
+    "address": "64 RUE DE SAINTONGE, 75003 PARIS"
+  },
+  {
+    "name": "TAMSEN SERVICES",
+    "nafCode": "45.20A",
+    "latitude": 48.86864699999998,
+    "longitude": 2.312689,
+    "address": "18 AVENUE DES CHAMPS ELYSEES, 75008 PARIS"
+  },
+  {
+    "name": "REPAIR AND RUN",
+    "nafCode": "45.20A",
+    "latitude": 48.861626999999984,
+    "longitude": 2.3733729999999995,
+    "address": "64 BOULEVARD VOLTAIRE, 75011 PARIS"
+  },
+  {
+    "name": "DIAMOND CAR WASH",
+    "nafCode": "45.20A",
+    "latitude": 48.85333399999998,
+    "longitude": 2.362032000000001,
+    "address": "14 RUE CHARLES V, 75004 PARIS"
+  },
+  {
+    "name": "SPLENDIDE GARAGE SAINT GERMAIN",
+    "nafCode": "45.20A",
+    "latitude": 48.84843499999999,
+    "longitude": 2.3521620000000008,
+    "address": "29 RUE DE POISSY, 75005 PARIS"
+  },
+  {
+    "name": "SATIS AUTO",
+    "nafCode": "45.20A",
+    "latitude": 48.867001,
+    "longitude": 2.331786,
+    "address": "PARKING SAINT HONORE, PLACE DU MARCHE SAINT-HONORE, 75001 PARIS"
+  },
+  {
+    "name": "PREPA CLEAN",
+    "nafCode": "45.20A",
+    "latitude": 48.86193599999999,
+    "longitude": 2.382479,
+    "address": "38 RUE SERVAN, 75011 PARIS"
+  },
+  {
+    "name": "STV.",
+    "nafCode": "45.20A",
+    "latitude": 48.87694299999999,
+    "longitude": 2.353003000000001,
+    "address": "28 RUE DE CHABROL, 75010 PARIS"
+  },
+  {
+    "name": "AB GLASS",
+    "nafCode": "45.20A",
+    "latitude": 48.87763399999999,
+    "longitude": 2.3482989999999995,
+    "address": "REZ DE CHAUSSEE, 10 RUE MARIE-ELEONORE DE BELLEFOND, 75009 PARIS"
+  },
+  {
+    "name": "TS AUTO SERVICES",
+    "nafCode": "45.20A",
+    "latitude": 48.87796399999997,
+    "longitude": 2.344426,
+    "address": "CS70049, 42 RUE DE MAUBEUGE, 75009 PARIS"
+  },
+  {
+    "name": "LAVAGE AUTO SERVICES",
+    "nafCode": "45.20A",
+    "latitude": 48.856547999999975,
+    "longitude": 2.3092280000000005,
+    "address": "7 AVENUE DE LA MOTTE-PICQUET, 75007 PARIS"
+  },
+  {
+    "name": "KAM AUTO-PARTS FRANCE",
+    "nafCode": "45.20A",
+    "latitude": 48.87418799999999,
+    "longitude": 2.355146000000001,
+    "address": "93 RUE DU FAUBOURG SAINT-DENIS, 75010 PARIS"
+  },
+  {
+    "name": "ILYAN CLEANING",
+    "nafCode": "45.20A",
+    "latitude": 48.87100399999999,
+    "longitude": 2.3241850000000013,
+    "address": "21 PLACE DE LA MADELEINE, 75008 PARIS"
+  },
+  {
+    "name": "TARKAR 91",
+    "nafCode": "45.20A",
+    "latitude": 48.865402,
+    "longitude": 2.352453000000001,
+    "address": "10 RUE GRENETA, 75003 PARIS"
+  },
+  {
+    "name": "A2R SEBASTOPOL",
+    "nafCode": "45.20A",
+    "latitude": 48.86696799999999,
+    "longitude": 2.352707000000001,
+    "address": "111 BOULEVARD DE SEBASTOPOL, 75002 PARIS"
+  },
+  {
+    "name": "PRO CARROSSERIE SERVICES",
+    "nafCode": "45.20A",
+    "latitude": 48.879224999999984,
+    "longitude": 2.353677,
+    "address": "118 BOULEVARD DE MAGENTA, 75010 PARIS"
+  },
+  {
+    "name": "DRS FRANCE SAS",
+    "nafCode": "45.20A",
+    "latitude": 48.87332799999997,
+    "longitude": 2.3280930000000004,
+    "address": "16 RUE AUBER, 75009 PARIS"
+  },
+  {
+    "name": "AUTOWASCHEN",
+    "nafCode": "45.20A",
+    "latitude": 48.86279999999999,
+    "longitude": 2.340974000000001,
+    "address": "23-25, 23 RUE JEAN-JACQUES ROUSSEAU, 75001 PARIS"
+  },
+  {
+    "name": "FCS MOBILITY LAB",
+    "nafCode": "45.20A",
+    "latitude": 48.85102299999998,
+    "longitude": 2.3096660000000013,
+    "address": "31 AVENUE DE SEGUR, 75007 PARIS"
+  },
+  {
+    "name": "AUTO TINO SERVICE",
+    "nafCode": "45.20A",
+    "latitude": 48.865296,
+    "longitude": 2.3348350000000004,
+    "address": "14 AVENUE DE L'OPERA, 75001 PARIS"
+  },
+  {
+    "name": "AUTO CLEAN EXPRESS SERVICES",
+    "nafCode": "45.20A",
+    "latitude": 48.87869599999999,
+    "longitude": 2.3550880000000007,
+    "address": "144 RUE LA FAYETTE, 75010 PARIS"
+  },
+  {
+    "name": "EUROHAILSTORM",
+    "nafCode": "45.20A",
+    "latitude": 48.86449599999999,
+    "longitude": 2.3749290000000003,
+    "address": "75 AVENUE PARMENTIER, 75011 PARIS"
+  },
+  {
+    "name": "3AMII PARE-BRISE",
+    "nafCode": "45.20A",
+    "latitude": 48.86621399999999,
+    "longitude": 2.3291980000000008,
+    "address": "231 RUE SAINT-HONORE, 75001 PARIS"
+  },
+  {
+    "name": "SHMS GARAGE",
+    "nafCode": "45.20A",
+    "latitude": 48.875298,
+    "longitude": 2.340938000000001,
+    "address": "52 RUE DU FAUBOURG MONTMARTRE, 75009 PARIS"
+  },
+  {
+    "name": "FELIXAUTO",
+    "nafCode": "45.20A",
+    "latitude": 48.855938,
+    "longitude": 2.3056300000000007,
+    "address": "26 RUE BOSQUET, 75007 PARIS"
+  }
+]
