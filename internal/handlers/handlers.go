@@ -56,7 +56,8 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		req.NAFCode, len(req.Features[0].Geometry.Coordinates[0]))
 
 	// Search for businesses
-	businesses, err := h.csvService.SearchBusinesses(req)
+	geojsonStr, _ := json.Marshal(req.Features[0].Geometry)
+	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode)
 	if err != nil {
 		log.Printf("Error searching businesses: %v\n", err)
 		http.Error(w, "Error processing request", http.StatusInternalServerError)

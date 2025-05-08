@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -12,11 +13,14 @@ import (
 	"time"
 
 	"csv-processor/internal/models"
+
+	"github.com/twpayne/go-geom"
 )
 
 // CSVService handles the business logic for processing the CSV file
 type CSVService struct {
 	filePath string
+	spatialIndex *models.SpatialIndex
 }
 
 // NewCSVService creates a new CSVService instance
@@ -26,26 +30,40 @@ func NewCSVService(filePath string) *CSVService {
 	}
 }
 
-// convertGeoJSONToPoints converts GeoJSON polygon coordinates to our internal Point format
-func convertGeoJSONToPoints(coords [][][]float64) []models.Point {
+// convertGeoJSONToPolygon converts GeoJSON polygon coordinates to a go-geom Polygon
+func convertGeoJSONToPolygon(coords [][][]float64) (*geom.Polygon, error) {
 	if len(coords) == 0 || len(coords[0]) == 0 {
-		return nil
+		return nil, fmt.Errorf("invalid coordinates")
 	}
 
-	points := make([]models.Point, len(coords[0]))
+	// Convert coordinates to the format expected by go-geom
+	linearRings := make([]*geom.LinearRing, 1)
+	coords2D := make([]geom.Coord, len(coords[0]))
 	for i, coord := range coords[0] {
-		if len(coord) >= 2 {
-			points[i] = models.Point{
-				Lat: coord[1], // GeoJSON uses [longitude, latitude]
-				Lng: coord[0],
-			}
+		if len(coord) < 2 {
+			return nil, fmt.Errorf("invalid coordinate at index %d", i)
 		}
+		coords2D[i] = geom.Coord{coord[0], coord[1]}
 	}
-	return points
+
+	linearRing, err := geom.NewLinearRing(geom.XY).SetCoords(coords2D)
+	if err != nil {
+		return nil, fmt.Errorf("error creating linear ring: %v", err)
+	}
+	linearRings[0] = linearRing
+
+	// Convert coordinates to flat format
+	flatCoords := make([]float64, 0, len(coords2D)*2)
+	ends := make([]int, 1)
+	for _, coord := range coords2D {
+		flatCoords = append(flatCoords, coord[0], coord[1])
+	}
+	ends[0] = len(flatCoords)
+	return geom.NewPolygonFlat(geom.XY, flatCoords, ends), nil
 }
 
 // writeResultsToFile writes the search results to a JSON file
-func writeResultsToFile(results []models.Business, nafCode string) error {
+func writeResultsToFile(businesses []*models.Business, nafCode string) error {
 	// Create results directory if it doesn't exist
 	resultsDir := "results"
 	if err := os.MkdirAll(resultsDir, 0755); err != nil {
@@ -66,7 +84,7 @@ func writeResultsToFile(results []models.Business, nafCode string) error {
 	// Write JSON with indentation
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(results); err != nil {
+	if err := encoder.Encode(businesses); err != nil {
 		return fmt.Errorf("error writing results to file: %v", err)
 	}
 
@@ -75,30 +93,60 @@ func writeResultsToFile(results []models.Business, nafCode string) error {
 }
 
 // SearchBusinesses searches for businesses matching the given criteria
-func (s *CSVService) SearchBusinesses(req models.SearchRequest) ([]models.Business, error) {
-	// Convert GeoJSON polygon to our internal Point format
-	var polygon []models.Point
-	if len(req.Features) > 0 && req.Features[0].Geometry.Type == "Polygon" {
-		polygon = convertGeoJSONToPoints(req.Features[0].Geometry.Coordinates)
-	}
-	if len(polygon) < 3 {
-		return nil, fmt.Errorf("invalid polygon: must have at least 3 points")
+func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string) ([]*models.Business, error) {
+	// Convert GeoJSON to polygon
+	polygon, err := s.convertGeoJSONToPolygon(geojsonStr)
+	if err != nil {
+		return nil, fmt.Errorf("error converting GeoJSON to polygon: %v", err)
 	}
 
+	// Load only businesses with matching NAF code
+	businesses, err := s.loadBusinessesByNAF(nafCode)
+	if err != nil {
+		return nil, fmt.Errorf("error loading businesses: %v", err)
+	}
+
+	// Create spatial index with filtered businesses
+	spatialIndex := models.NewSpatialIndex(businesses)
+
+	// Query businesses within polygon
+	results := spatialIndex.Query(polygon)
+
+	// Write results to file
+	if err := s.writeResultsToFile(results); err != nil {
+		log.Printf("Warning: error writing results to file: %v", err)
+	}
+
+	return results, nil
+}
+
+// loadBusinessesByNAF loads only businesses with the given NAF code
+func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, error) {
 	file, err := os.Open(s.filePath)
 	if err != nil {
-		log.Printf("Error opening CSV file: %v\n", err)
 		return nil, fmt.Errorf("error opening CSV file: %v", err)
 	}
 	defer file.Close()
 
-	reader := csv.NewReader(file)
-	// Configure reader to handle line breaks within fields
+	// Use buffered reader for better performance
+	bufReader := bufio.NewReader(file)
+	reader := csv.NewReader(bufReader)
 	reader.LazyQuotes = true
-	reader.FieldsPerRecord = -1 // Allow variable number of fields
+	reader.FieldsPerRecord = -1
+	reader.ReuseRecord = true // Reuse record slice for better memory usage
 
-	var results []models.Business
-	lineNum := 0
+	// Pre-allocate slice with reasonable capacity
+	businesses := make([]*models.Business, 0, 1000)
+
+	// Skip header
+	_, err = reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("error reading CSV header: %v", err)
+	}
+
+	// Pre-allocate address builder with reasonable capacity
+	var address strings.Builder
+	address.Grow(200)
 
 	for {
 		record, err := reader.Read()
@@ -106,131 +154,114 @@ func (s *CSVService) SearchBusinesses(req models.SearchRequest) ([]models.Busine
 			break
 		}
 		if err != nil {
-			log.Printf("Error reading CSV line %d: %v\n", lineNum, err)
-			return nil, fmt.Errorf("error reading CSV line %d: %v", lineNum, err)
-		}
-		lineNum++
-
-		// Skip header row
-		if lineNum == 1 || len(record) < 3 || record[0] == "siret" {
+			log.Printf("Error reading line: %v\n", err)
 			continue
 		}
 
-		// Get NAF code (activitePrincipaleEtablissement field)
-		nafCode := ""
-		for i := len(record) - 1; i >= 0; i-- {
-			if strings.Contains(record[i], "NAFRev2") {
-				if i > 0 {
-					nafCode = record[i-1]
-					break
-				}
-			}
-		}
-
-		if nafCode == "" || nafCode != req.NAFCode {
+		if len(record) < 20 {
 			continue
 		}
 
-		// Get coordinates (last two fields)
-		if len(record) < 2 {
+		// Parse NAF code first to filter early
+		recordNAFCode := record[len(record)-5]
+		if recordNAFCode != nafCode {
 			continue
 		}
-		
+
+		// Parse business name
+		businessName := record[0]
+		if businessName == "" {
+			continue
+		}
+
+		// Parse coordinates
 		longitude, err := strconv.ParseFloat(record[len(record)-2], 64)
 		if err != nil {
-			log.Printf("Error parsing longitude at line %d: %v\n", lineNum, err)
 			continue
 		}
 		latitude, err := strconv.ParseFloat(record[len(record)-1], 64)
 		if err != nil {
-			log.Printf("Error parsing latitude at line %d: %v\n", lineNum, err)
 			continue
 		}
 
-		// Check if point is inside polygon
-		if !isPointInPolygon(models.Point{Lat: latitude, Lng: longitude}, polygon) {
-			continue
+		// Reset address builder
+		address.Reset()
+
+		// Parse address more efficiently
+		addressParts := []string{
+			record[12],  // complementAdresseEtablissement
+			record[13],  // numeroVoieEtablissement
+			record[17],  // typeVoieEtablissement
+			record[18],  // libelleVoieEtablissement
+			record[19],  // codePostalEtablissement
+			record[20],  // libelleCommuneEtablissement
 		}
 
-		// Get business name
-		businessName := ""
-		for i := len(record) - 1; i >= 0; i-- {
-			if strings.Contains(record[i], "NAFRev2") {
-				if i > 3 {
-					businessName = record[i-2]
-					break
+		for i, part := range addressParts {
+			if part != "" {
+				if i > 0 {
+					address.WriteString(" ")
 				}
+				address.WriteString(part)
 			}
-		}
-
-		// Get address
-		address := ""
-		// address starts after etablissementSiege which is the 10th field. This field is either True or False, the next field is a number, we skip that, then we have the address
-		for i := 11; i < len(record) && i < 20; i++ {
-			if record[i] != "" {
-				// check if record[i] is a number, if it is, remove decimal point and what is after it
-				if _, err := strconv.ParseFloat(record[i], 64); err == nil {
-					record[i] = strings.Replace(record[i], ".", " ", -1)
-					record[i] = strings.Split(record[i], " ")[0]
-				}
-				if i >= 12 && i < 17 {
-					address += record[i] + " "
-				} else if i < 12 || i==17 {
-					address += record[i] + ", "
-				} else {
-					address += record[i] + " "
-				}
-			}
-		}
-		if address != "" {
-			address = strings.TrimSpace(address)
 		}
 
 		// Create business entry
-		business := models.Business{
+		business := &models.Business{
 			Name:      businessName,
-			NAFCode:   nafCode,
+			NAFCode:   recordNAFCode,
 			Latitude:  latitude,
 			Longitude: longitude,
-			Address:   address,
+			Address:   address.String(),
 		}
 
-		results = append(results, business)
+		businesses = append(businesses, business)
 	}
 
-	log.Printf("Processed %d lines, found %d matching businesses\n", lineNum, len(results))
-
-	// Write results to file
-	if err := writeResultsToFile(results, req.NAFCode); err != nil {
-		log.Printf("Warning: Could not write results to file: %v\n", err)
-		// Continue anyway, as this is not a critical error
-	}
-
-	return results, nil
+	log.Printf("Loaded %d businesses with NAF code %s\n", len(businesses), nafCode)
+	return businesses, nil
 }
 
-// isPointInPolygon implements the ray casting algorithm for point-in-polygon test
-func isPointInPolygon(point models.Point, polygon []models.Point) bool {
-	if len(polygon) < 3 {
-		return false
+func (s *CSVService) convertGeoJSONToPolygon(geojsonStr string) (*geom.Polygon, error) {
+	var geojson struct {
+		Type        string          `json:"type"`
+		Coordinates [][][]float64   `json:"coordinates"`
 	}
 
-	inside := false
-	j := len(polygon) - 1
-
-	for i := 0; i < len(polygon); i++ {
-		if (polygon[i].Lat > point.Lat) != (polygon[j].Lat > point.Lat) {
-			slope := (point.Lng-polygon[i].Lng)*(polygon[j].Lat-polygon[i].Lat) -
-				(polygon[j].Lng-polygon[i].Lng)*(point.Lat-polygon[i].Lat)
-			if slope == 0 {
-				return true
-			}
-			if (slope < 0) != (polygon[j].Lat < polygon[i].Lat) {
-				inside = !inside
-			}
-		}
-		j = i
+	if err := json.Unmarshal([]byte(geojsonStr), &geojson); err != nil {
+		return nil, fmt.Errorf("error parsing GeoJSON: %v", err)
 	}
 
-	return inside
+	if geojson.Type != "Polygon" {
+		return nil, fmt.Errorf("unsupported GeoJSON type: %s", geojson.Type)
+	}
+
+	if len(geojson.Coordinates) == 0 {
+		return nil, fmt.Errorf("empty polygon coordinates")
+	}
+
+	// Pre-allocate coords slice with exact size
+	coords := make([][]float64, len(geojson.Coordinates[0]))
+	for i, coord := range geojson.Coordinates[0] {
+		coords[i] = make([]float64, 2)
+		copy(coords[i], coord)
+	}
+
+	// Create polygon with pre-allocated coordinates
+	polygon := geom.NewPolygon(geom.XY)
+	coords2D := make([][]geom.Coord, 1)
+	coords2D[0] = make([]geom.Coord, len(coords))
+	for i, coord := range coords {
+		coords2D[0][i] = geom.Coord{coord[0], coord[1]}
+	}
+	_, err := polygon.SetCoords(coords2D)
+	if err != nil {
+		return nil, fmt.Errorf("error creating polygon: %v", err)
+	}
+
+	return polygon, nil
+}
+
+func (s *CSVService) writeResultsToFile(businesses []*models.Business) error {
+	return writeResultsToFile(businesses, "")
 } 
