@@ -88,7 +88,6 @@ func writeResultsToFile(businesses []*models.Business, nafCode string) error {
 		return fmt.Errorf("error writing results to file: %v", err)
 	}
 
-	log.Printf("Results written to: %s", filename)
 	return nil
 }
 
@@ -113,7 +112,7 @@ func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string) ([]*mod
 	results := spatialIndex.Query(polygon)
 
 	// Write results to file
-	if err := s.writeResultsToFile(results); err != nil {
+	if err := s.writeResultsToFile(results, nafCode); err != nil {
 		log.Printf("Warning: error writing results to file: %v", err)
 	}
 
@@ -154,7 +153,6 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 			break
 		}
 		if err != nil {
-			log.Printf("Error reading line: %v\n", err)
 			continue
 		}
 
@@ -218,7 +216,6 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 		businesses = append(businesses, business)
 	}
 
-	log.Printf("Loaded %d businesses with NAF code %s\n", len(businesses), nafCode)
 	return businesses, nil
 }
 
@@ -262,6 +259,6 @@ func (s *CSVService) convertGeoJSONToPolygon(geojsonStr string) (*geom.Polygon, 
 	return polygon, nil
 }
 
-func (s *CSVService) writeResultsToFile(businesses []*models.Business) error {
-	return writeResultsToFile(businesses, "")
+func (s *CSVService) writeResultsToFile(businesses []*models.Business, nafCode string) error {
+	return writeResultsToFile(businesses, nafCode)
 } 

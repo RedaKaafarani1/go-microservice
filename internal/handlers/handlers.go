@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"csv-processor/internal/models"
 	"csv-processor/internal/services"
@@ -23,6 +24,8 @@ func NewSearchHandler(csvService *services.CSVService) *SearchHandler {
 
 // HandleSearch handles the search request
 func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -30,7 +33,6 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 	var req models.SearchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding request: %v\n", err)
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
@@ -51,15 +53,10 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log the request details
-	log.Printf("Processing request for NAF code: %s with polygon of %d points\n",
-		req.NAFCode, len(req.Features[0].Geometry.Coordinates[0]))
-
 	// Search for businesses
 	geojsonStr, _ := json.Marshal(req.Features[0].Geometry)
 	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode)
 	if err != nil {
-		log.Printf("Error searching businesses: %v\n", err)
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
 		return
 	}
@@ -67,8 +64,11 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	// Return results
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(businesses); err != nil {
-		log.Printf("Error encoding response: %v\n", err)
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		return
 	}
+
+	// Log processing time
+	duration := time.Since(startTime)
+	log.Printf("Request processed in %v\n", duration)
 } 
