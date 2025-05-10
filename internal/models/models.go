@@ -150,4 +150,105 @@ func (s *SpatialIndex) Query(polygon *geom.Polygon) []*Business {
 	}
 
 	return results
+}
+
+// IrisData represents the demographic data for an IRIS zone
+type IrisData struct {
+	// Raw data storage for all 119 keys
+	RawData map[string]float64 `json:"raw_data"`
+
+	// Basic identifiers
+	IRIS     string  `json:"iris"`
+	COM      string  `json:"com"`
+	TYP_IRIS string  `json:"typ_iris"`
+	LAB_IRIS string  `json:"lab_iris"`
+
+	// Population data
+	TotalPopulation float64            `json:"total_population"`
+	PopulationByAge map[string]float64 `json:"population_by_age"`
+
+	// Gender-specific population
+	MalePopulation   float64            `json:"male_population"`
+	MaleByAge        map[string]float64 `json:"male_by_age"`
+	FemalePopulation float64            `json:"female_population"`
+	FemaleByAge      map[string]float64 `json:"female_by_age"`
+
+	// Professional categories
+	Professionals      map[string]float64 `json:"professionals"`
+	MaleProfessionals  map[string]float64 `json:"male_professionals"`
+	FemaleProfessionals map[string]float64 `json:"female_professionals"`
+
+	// Nationality
+	FrenchPopulation    float64 `json:"french_population"`
+	ForeignPopulation   float64 `json:"foreign_population"`
+	ImmigrantPopulation float64 `json:"immigrant_population"`
+
+	// Households
+	NumberOfHouseholds   float64 `json:"number_of_households"`
+	CollectiveDwellings float64 `json:"collective_dwellings"`
+
+	// Geographic data
+	Polygon *geom.Polygon `json:"polygon"`
+	Area    float64       `json:"area"`
+
+	// Family data
+	FamilyTypes map[string]float64 `json:"family_types"`
+
+	// Household types
+	HouseholdTypes map[string]float64 `json:"household_types"`
+
+	// Activity
+	ActivePopulation float64 `json:"active_population"`
+	StudentPopulation float64 `json:"student_population"`
+
+	// Housing
+	TotalDwellings      float64 `json:"total_dwellings"`
+	MainResidences      float64 `json:"main_residences"`
+	SecondaryResidences float64 `json:"secondary_residences"`
+	VacantDwellings     float64 `json:"vacant_dwellings"`
+	Houses              float64 `json:"houses"`
+	Apartments          float64 `json:"apartments"`
+
+	// Dwellings by rooms
+	DwellingsByRooms map[string]float64 `json:"dwellings_by_rooms"`
+
+	// Housing construction periods
+	HousingPeriods map[string]float64 `json:"housing_periods"`
+
+	// Mobility
+	Mobility map[string]float64 `json:"mobility"`
+
+	// Housing tenure
+	HousingTenure map[string]float64 `json:"housing_tenure"`
+
+	// Vehicles
+	HouseholdsByCars map[string]float64 `json:"households_by_cars"`
+}
+
+// QPData represents data about a Quartier Prioritaire
+type QPData struct {
+	LibQP string  `json:"qp"`
+	Commune string `json:"com"`
+	IntersectionPercentage float64 `json:"inter_per"`
+}
+
+// IrisResponse represents the response for the IRIS data endpoint
+type IrisResponse struct {
+	TotalArea       float64            `json:"totalArea"`
+	TotalPopulation float64            `json:"totalPopulation"`
+	Data           map[string]float64 `json:"data"`
+	QPData         []QPData          `json:"qp_data"`
+}
+
+// IrisRequest represents the request for the IRIS data endpoint
+type IrisRequest struct {
+	Type    string `json:"type"`
+	Features []struct {
+		Type       string `json:"type"`
+		Properties struct{} `json:"properties"`
+		Geometry   struct {
+			Type        string        `json:"type"`
+			Coordinates [][][]float64 `json:"coordinates"`
+		} `json:"geometry"`
+	} `json:"features"`
 } 
