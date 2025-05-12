@@ -227,17 +227,67 @@ type IrisData struct {
 
 // QPData represents data about a Quartier Prioritaire
 type QPData struct {
-	LibQP string  `json:"qp"`
-	Commune string `json:"com"`
-	IntersectionPercentage float64 `json:"inter_per"`
+	ID string `json:"id"`
+	CodeQP string  `json:"codeqp"`
+	LibQP string  `json:"name"`
+	Commune string `json:"commune"`
+	IntersectionPercentage float64 `json:"percentage"`
+}
+
+// CommuneData represents data from the commune CSV file
+type CommuneData struct {
+	ID           string  `json:"id"`
+	CommuneCode  string  `json:"commune_code"`
+	CommuneName  string  `json:"commune_name"`
+	PostalCode   string  `json:"postal_code"`
+	Percentage   float64 `json:"percentage"`
+	Population   float64 `json:"population"`
+}
+
+type PostalCodeData struct {
+	Percentage float64 `json:"percentage"`
+	PostalCode string `json:"postal_code"`
+}
+
+// AdministrativeData groups administrative-related data
+type AdministrativeData struct {
+	Communes     []CommuneData     `json:"communes"`
+	PostalCodes  []PostalCodeData  `json:"postal_codes"`
+	SpecialZones []QPData         `json:"special_zones"`
+}
+
+// CriminalityData represents the criminality statistics for a specific crime type
+type CriminalityData struct {
+	IsTotal                      bool    `json:"is_total"`
+	CrimesTotal                  float64 `json:"crimes_total"`
+	PercentageCoveredCrimes      float64 `json:"percentage_covered_crimes"`
+	PercentageRelativeToDepartmental float64 `json:"percentage_relative_to_departmental"`
+}
+
+// CriminalityResponse represents the complete criminality statistics response
+type CriminalityResponse struct {
+	DrugUsage                    *CriminalityData `json:"drug_usage"`
+	VehicleTheft                 *CriminalityData `json:"vehicle_theft"`
+	ArmedRobberies               *CriminalityData `json:"armed_robberies"`
+	HomeBurglaries               *CriminalityData `json:"home_burglaries"`
+	SexualViolence               *CriminalityData `json:"sexual_violence"`
+	DrugTrafficking              *CriminalityData `json:"drug_trafficking"`
+	VoluntaryInjuries            *CriminalityData `json:"voluntary_injuries"`
+	TheftFromVehicles            *CriminalityData `json:"theft_from_vehicles"`
+	OtherVoluntaryInjuries       *CriminalityData `json:"other_voluntary_injuries"`
+	TheftOfVehicleAccessories    *CriminalityData `json:"theft_of_vehicle_accessories"`
+	IntrafamilyVoluntaryInjuries *CriminalityData `json:"intrafamily_voluntary_injuries"`
+	VoluntaryDamageAndVandalism  *CriminalityData `json:"voluntary_damage_and_vandalism"`
+	ViolentRobberiesWithoutWeapon *CriminalityData `json:"violent_robberies_without_weapon"`
+	RobberiesWithoutViolenceAgainstPersons *CriminalityData `json:"robberies_without_violence_against_persons"`
 }
 
 // IrisResponse represents the response for the IRIS data endpoint
 type IrisResponse struct {
-	TotalArea       float64            `json:"totalArea"`
 	TotalPopulation float64            `json:"totalPopulation"`
-	Data           map[string]float64 `json:"data"`
-	QPData         []QPData          `json:"qp_data"`
+	Data           map[string]float64 `json:"statistics"`
+	Criminality    CriminalityResponse `json:"criminality"`
+	Administrative AdministrativeData `json:"administrative"`
 }
 
 // IrisRequest represents the request for the IRIS data endpoint

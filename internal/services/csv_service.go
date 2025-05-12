@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/exp/slices"
+
 	"csv-processor/internal/models"
 
 	"github.com/twpayne/go-geom"
@@ -23,14 +25,23 @@ type CSVService struct {
 	businessFilePath string
 	irisFilePath    string
 	qpFilePath      string
+	communeFilePath string
+	criminalityService *CriminalityService
 }
 
 // NewCSVService creates a new CSVService instance
-func NewCSVService(businessFilePath, irisFilePath, qpFilePath string) *CSVService {
+func NewCSVService(businessFilePath, irisFilePath, qpFilePath, communeFilePath string) *CSVService {
+	criminalityService, err := NewCriminalityService()
+	if err != nil {
+		log.Printf("Warning: failed to initialize criminality service: %v", err)
+	}
+	
 	return &CSVService{
 		businessFilePath: businessFilePath,
 		irisFilePath:    irisFilePath,
 		qpFilePath:      qpFilePath,
+		communeFilePath: communeFilePath,
+		criminalityService: criminalityService,
 	}
 }
 
@@ -314,8 +325,17 @@ func calculateIntersectionArea(requestPoly, irisPoly *geom.Polygon) float64 {
 	
 	// Calculate intersection using geom's built-in functionality
 	coords := make([]geom.Coord, 0)
+
+	// Check if any IRIS points are in the request polygon
 	for _, coord := range irisRing.Coords() {
 		if xy.IsPointInRing(geom.XY, coord, requestRing.FlatCoords()) {
+			coords = append(coords, coord)
+		}
+	}
+
+	// Check if any request points are in the IRIS polygon
+	for _, coord := range requestRing.Coords() {
+		if xy.IsPointInRing(geom.XY, coord, irisRing.FlatCoords()) {
 			coords = append(coords, coord)
 		}
 	}
@@ -343,7 +363,7 @@ func calculateIntersectionPercentage(requestPoly, irisPoly *geom.Polygon) float6
 	if irisArea <= 0 {
 		return 0
 	}
-
+	
 	// Calculate percentage
 	return (intersectionArea / irisArea) * 100
 }
@@ -358,12 +378,13 @@ func aggregateIrisData(response *models.IrisResponse, iris *models.IrisData, inc
 	}
 
 	// Update total area and population
-	response.TotalArea += iris.Area * factor
 	response.TotalPopulation += iris.TotalPopulation * factor
 }
 
 // loadQPData loads QP data from the CSV file
 func (s *CSVService) loadQPData() ([]struct {
+	ID string
+	CodeQP string
 	LibQP    string
 	Commune  string
 	Polygon  *geom.Polygon
@@ -385,6 +406,8 @@ func (s *CSVService) loadQPData() ([]struct {
 	}
 
 	var qpData []struct {
+		ID string
+		CodeQP string
 		LibQP    string
 		Commune  string
 		Polygon  *geom.Polygon
@@ -404,6 +427,8 @@ func (s *CSVService) loadQPData() ([]struct {
 		}
 
 		// Parse QP data
+		id := record[0]
+		codeQP := record[1]
 		libQP := record[2]    // Lib_QP
 		commune := record[3]  // Commune
 		polygonStr := record[6] // polygon
@@ -418,10 +443,14 @@ func (s *CSVService) loadQPData() ([]struct {
 		}
 
 		qpData = append(qpData, struct {
+			ID string
+			CodeQP string
 			LibQP    string
 			Commune  string
 			Polygon  *geom.Polygon
 		}{
+			ID: id,
+			CodeQP: codeQP,
 			LibQP:    libQP,
 			Commune:  commune,
 			Polygon:  polygon,
@@ -429,6 +458,53 @@ func (s *CSVService) loadQPData() ([]struct {
 	}
 
 	return qpData, nil
+}
+
+// loadCommuneData loads commune data from the CSV file
+func (s *CSVService) loadCommuneData() (map[string]*models.CommuneData, error) {
+	file, err := os.Open(s.communeFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening commune CSV file: %v", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.Comma = ';' // Set semicolon as delimiter
+	reader.LazyQuotes = true
+
+	// Skip header
+	_, err = reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("error reading CSV header: %v", err)
+	}
+
+	communeData := make(map[string]*models.CommuneData)
+	lineNumber := 0
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue
+		}
+
+		if len(record) < 7 { // Make sure we have enough columns
+			continue
+		}
+
+		// Create CommuneData struct with values from the record
+		communeData[record[0]] = &models.CommuneData{
+			// id is the line number
+			ID: strconv.Itoa(lineNumber),
+			CommuneCode: record[0],
+			CommuneName: record[len(record)-5],
+			PostalCode:  record[len(record)-6],
+		}
+		lineNumber++
+	}
+
+	return communeData, nil
 }
 
 // GetIrisData retrieves and aggregates IRIS data for the given polygon
@@ -449,6 +525,12 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		return nil, fmt.Errorf("error loading IRIS data: %v", err)
 	}
 
+	// Load commune data
+	communeData, err := s.loadCommuneData()
+	if err != nil {
+		return nil, fmt.Errorf("error loading commune data: %v", err)
+	}
+	
 	// Load QP data
 	qpData, err := s.loadQPData()
 	if err != nil {
@@ -458,7 +540,11 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 	// Calculate intersection and aggregate data
 	response := &models.IrisResponse{
 		Data: make(map[string]float64),
-		QPData: make([]models.QPData, 0),
+		Administrative: models.AdministrativeData{
+			Communes:     make([]models.CommuneData, 0),
+			PostalCodes:  make([]models.PostalCodeData, 0),
+			SpecialZones: make([]models.QPData, 0),
+		},
 	}
 
 	// Process each IRIS zone
@@ -474,6 +560,21 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 			intersectingZones++
 			// Aggregate data with inclusion percentage
 			aggregateIrisData(response, iris, inclusionPercentage)
+			
+			// Add corresponding commune data if available
+			if communeValue, exists := communeData[iris.COM]; exists {
+				// append only if it's not already in the array
+				if !slices.Contains(response.Administrative.Communes, *communeValue) {
+					communeValue.Percentage = inclusionPercentage
+					communeValue.Population = iris.TotalPopulation
+					response.Administrative.Communes = append(response.Administrative.Communes, *communeValue)
+					// add postal code data
+					response.Administrative.PostalCodes = append(response.Administrative.PostalCodes, models.PostalCodeData{
+						PostalCode: communeValue.PostalCode,
+						Percentage: inclusionPercentage,
+					})
+				}
+			}
 		}
 	}
 
@@ -486,12 +587,19 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		// Calculate intersection percentage
 		inclusionPercentage := calculateIntersectionPercentage(polygon, qp.Polygon)
 		if inclusionPercentage > 0 {
-			response.QPData = append(response.QPData, models.QPData{
+			response.Administrative.SpecialZones = append(response.Administrative.SpecialZones, models.QPData{
+				ID: qp.ID,
+				CodeQP: qp.CodeQP,
 				LibQP: qp.LibQP,
 				Commune: qp.Commune,
 				IntersectionPercentage: inclusionPercentage,
 			})
 		}
+	}
+
+	// Calculate criminality data if service is available
+	if s.criminalityService != nil {
+		response.Criminality = *s.criminalityService.CalculateCriminality(response.Administrative.Communes)
 	}
 
 	if intersectingZones == 0 {
@@ -556,78 +664,79 @@ func (s *CSVService) parseIrisRecord(record []string) *models.IrisData {
 	}
 
 	// Store all raw values except IRIS, COM, TYP_IRIS, LAB_IRIS
-	iris.RawData["P20_POP"] = parseFloat(record[4])
-	iris.RawData["P20_POP0002"] = parseFloat(record[5])
-	iris.RawData["P20_POP0305"] = parseFloat(record[6])
-	iris.RawData["P20_POP0610"] = parseFloat(record[7])
-	iris.RawData["P20_POP1117"] = parseFloat(record[8])
-	iris.RawData["P20_POP1824"] = parseFloat(record[9])
-	iris.RawData["P20_POP2539"] = parseFloat(record[10])
-	iris.RawData["P20_POP4054"] = parseFloat(record[11])
-	iris.RawData["P20_POP5564"] = parseFloat(record[12])
-	iris.RawData["P20_POP6579"] = parseFloat(record[13])
-	iris.RawData["P20_POP80P"] = parseFloat(record[14])
-	iris.RawData["P20_POP0014"] = parseFloat(record[15])
-	iris.RawData["P20_POP1529"] = parseFloat(record[16])
-	iris.RawData["P20_POP3044"] = parseFloat(record[17])
-	iris.RawData["P20_POP4559"] = parseFloat(record[18])
-	iris.RawData["P20_POP6074"] = parseFloat(record[19])
-	iris.RawData["P20_POP75P"] = parseFloat(record[20])
-	iris.RawData["P20_POP0019"] = parseFloat(record[21])
-	iris.RawData["P20_POP2064"] = parseFloat(record[22])
-	iris.RawData["P20_POP65P"] = parseFloat(record[23])
-	iris.RawData["P20_POPH"] = parseFloat(record[24])
-	iris.RawData["P20_H0014"] = parseFloat(record[25])
-	iris.RawData["P20_H1529"] = parseFloat(record[26])
-	iris.RawData["P20_H3044"] = parseFloat(record[27])
-	iris.RawData["P20_H4559"] = parseFloat(record[28])
-	iris.RawData["P20_H6074"] = parseFloat(record[29])
-	iris.RawData["P20_H75P"] = parseFloat(record[30])
-	iris.RawData["P20_H0019"] = parseFloat(record[31])
-	iris.RawData["P20_H2064"] = parseFloat(record[32])
-	iris.RawData["P20_H65P"] = parseFloat(record[33])
-	iris.RawData["P20_POPF"] = parseFloat(record[34])
-	iris.RawData["P20_F0014"] = parseFloat(record[35])
-	iris.RawData["P20_F1529"] = parseFloat(record[36])
-	iris.RawData["P20_F3044"] = parseFloat(record[37])
-	iris.RawData["P20_F4559"] = parseFloat(record[38])
-	iris.RawData["P20_F6074"] = parseFloat(record[39])
-	iris.RawData["P20_F75P"] = parseFloat(record[40])
-	iris.RawData["P20_F0019"] = parseFloat(record[41])
-	iris.RawData["P20_F2064"] = parseFloat(record[42])
-	iris.RawData["P20_F65P"] = parseFloat(record[43])
-	iris.RawData["C20_POP15P"] = parseFloat(record[44])
-	iris.RawData["C20_POP15P_CS1"] = parseFloat(record[45])
-	iris.RawData["C20_POP15P_CS2"] = parseFloat(record[46])
-	iris.RawData["C20_POP15P_CS3"] = parseFloat(record[47])
-	iris.RawData["C20_POP15P_CS4"] = parseFloat(record[48])
-	iris.RawData["C20_POP15P_CS5"] = parseFloat(record[49])
-	iris.RawData["C20_POP15P_CS6"] = parseFloat(record[50])
-	iris.RawData["C20_POP15P_CS7"] = parseFloat(record[51])
-	iris.RawData["C20_POP15P_CS8"] = parseFloat(record[52])
-	iris.RawData["C20_H15P"] = parseFloat(record[53])
-	iris.RawData["C20_H15P_CS1"] = parseFloat(record[54])
-	iris.RawData["C20_H15P_CS2"] = parseFloat(record[55])
-	iris.RawData["C20_H15P_CS3"] = parseFloat(record[56])
-	iris.RawData["C20_H15P_CS4"] = parseFloat(record[57])
-	iris.RawData["C20_H15P_CS5"] = parseFloat(record[58])
-	iris.RawData["C20_H15P_CS6"] = parseFloat(record[59])
-	iris.RawData["C20_H15P_CS7"] = parseFloat(record[60])
-	iris.RawData["C20_H15P_CS8"] = parseFloat(record[61])
-	iris.RawData["C20_F15P"] = parseFloat(record[62])
-	iris.RawData["C20_F15P_CS1"] = parseFloat(record[63])
-	iris.RawData["C20_F15P_CS2"] = parseFloat(record[64])
-	iris.RawData["C20_F15P_CS3"] = parseFloat(record[65])
-	iris.RawData["C20_F15P_CS4"] = parseFloat(record[66])
-	iris.RawData["C20_F15P_CS5"] = parseFloat(record[67])
-	iris.RawData["C20_F15P_CS6"] = parseFloat(record[68])
-	iris.RawData["C20_F15P_CS7"] = parseFloat(record[69])
-	iris.RawData["C20_F15P_CS8"] = parseFloat(record[70])
-	iris.RawData["P20_POP_FR"] = parseFloat(record[71])
-	iris.RawData["P20_POP_ETR"] = parseFloat(record[72])
-	iris.RawData["P20_POP_IMM"] = parseFloat(record[73])
-	iris.RawData["P20_PMEN"] = parseFloat(record[74])
-	iris.RawData["P20_PHORMEN"] = parseFloat(record[75])
+	iris.COM = record[1]
+	iris.RawData["population_total"] = parseFloat(record[4])
+	iris.RawData["population_general_age_0002"] = parseFloat(record[5])
+	iris.RawData["population_general_age_0305"] = parseFloat(record[6])
+	iris.RawData["population_general_age_0610"] = parseFloat(record[7])
+	iris.RawData["population_general_age_1117"] = parseFloat(record[8])
+	iris.RawData["population_general_age_1824"] = parseFloat(record[9])
+	iris.RawData["population_general_age_2539"] = parseFloat(record[10])
+	iris.RawData["population_general_age_4054"] = parseFloat(record[11])
+	iris.RawData["population_general_age_5564"] = parseFloat(record[12])
+	iris.RawData["population_general_age_6579"] = parseFloat(record[13])
+	iris.RawData["population_general_age_80P"] = parseFloat(record[14])
+	iris.RawData["population_total_age_0014"] = parseFloat(record[15])
+	iris.RawData["population_total_age_1529"] = parseFloat(record[16])
+	iris.RawData["population_total_age_3044"] = parseFloat(record[17])
+	iris.RawData["population_total_age_4559"] = parseFloat(record[18])
+	iris.RawData["population_total_age_6074"] = parseFloat(record[19])
+	iris.RawData["population_total_age_75P"] = parseFloat(record[20])
+	iris.RawData["population_total_age_0019"] = parseFloat(record[21])
+	iris.RawData["population_total_age_2064"] = parseFloat(record[22])
+	iris.RawData["population_total_age_65P"] = parseFloat(record[23])
+	iris.RawData["population_male"] = parseFloat(record[24])
+	iris.RawData["population_male_age_0014"] = parseFloat(record[25])
+	iris.RawData["population_male_age_1529"] = parseFloat(record[26])
+	iris.RawData["population_male_age_3044"] = parseFloat(record[27])
+	iris.RawData["population_male_age_4559"] = parseFloat(record[28])
+	iris.RawData["population_male_age_6074"] = parseFloat(record[29])
+	iris.RawData["population_male_age_75P"] = parseFloat(record[30])
+	iris.RawData["population_male_age_0019"] = parseFloat(record[31])
+	iris.RawData["population_male_age_2064"] = parseFloat(record[32])
+	iris.RawData["population_male_age_65P"] = parseFloat(record[33])
+	iris.RawData["population_female"] = parseFloat(record[34])
+	iris.RawData["population_female_age_0014"] = parseFloat(record[35])
+	iris.RawData["population_female_age_1529"] = parseFloat(record[36])
+	iris.RawData["population_female_age_3044"] = parseFloat(record[37])
+	iris.RawData["population_female_age_4559"] = parseFloat(record[38])
+	iris.RawData["population_female_age_6074"] = parseFloat(record[39])
+	iris.RawData["population_female_age_75P"] = parseFloat(record[40])
+	iris.RawData["population_female_age_0019"] = parseFloat(record[41])
+	iris.RawData["population_female_age_2064"] = parseFloat(record[42])
+	iris.RawData["population_female_age_65P"] = parseFloat(record[43])
+	iris.RawData["employees_number"] = parseFloat(record[44])
+	iris.RawData["employees_category_1"] = parseFloat(record[45])
+	iris.RawData["employees_category_2"] = parseFloat(record[46])
+	iris.RawData["employees_category_3"] = parseFloat(record[47])
+	iris.RawData["employees_category_4"] = parseFloat(record[48])
+	iris.RawData["employees_category_5"] = parseFloat(record[49])
+	iris.RawData["employees_category_6"] = parseFloat(record[50])
+	iris.RawData["employees_category_7"] = parseFloat(record[51])
+	iris.RawData["employees_category_8"] = parseFloat(record[52])
+	iris.RawData["employees_male"] = parseFloat(record[53])
+	iris.RawData["employees_male_category_1"] = parseFloat(record[54])
+	iris.RawData["employees_male_category_2"] = parseFloat(record[55])
+	iris.RawData["employees_male_category_3"] = parseFloat(record[56])
+	iris.RawData["employees_male_category_4"] = parseFloat(record[57])
+	iris.RawData["employees_male_category_5"] = parseFloat(record[58])
+	iris.RawData["employees_male_category_6"] = parseFloat(record[59])
+	iris.RawData["employees_male_category_7"] = parseFloat(record[60])
+	iris.RawData["employees_male_category_8"] = parseFloat(record[61])
+	iris.RawData["employees_female"] = parseFloat(record[62])
+	iris.RawData["employees_female_category_1"] = parseFloat(record[63])
+	iris.RawData["employees_female_category_2"] = parseFloat(record[64])
+	iris.RawData["employees_female_category_3"] = parseFloat(record[65])
+	iris.RawData["employees_female_category_4"] = parseFloat(record[66])
+	iris.RawData["employees_female_category_5"] = parseFloat(record[67])
+	iris.RawData["employees_female_category_6"] = parseFloat(record[68])
+	iris.RawData["employees_female_category_7"] = parseFloat(record[69])
+	iris.RawData["employees_female_category_8"] = parseFloat(record[70])
+	iris.RawData["population_french"] = parseFloat(record[71])
+	iris.RawData["population_foreign"] = parseFloat(record[72])
+	iris.RawData["population_immigrant"] = parseFloat(record[73])
+	iris.RawData["housing_people_per_home"] = parseFloat(record[74]) // this should be fixed, people in households
+	iris.RawData["housing_people_in_collective_housing"] = parseFloat(record[75])
 
 	// Find the polygon column (column 77)
 	polygonStr := record[76] // POLYGON
@@ -641,52 +750,51 @@ func (s *CSVService) parseIrisRecord(record []string) *models.IrisData {
 	}
 
 	iris.Area = parseFloat(record[77]) // AREA
-	iris.RawData["AREA"] = iris.Area
 
-	iris.RawData["C20_FAM"] = parseFloat(record[78])
-	iris.RawData["C20_COUPAENF"] = parseFloat(record[79])
-	iris.RawData["C20_FAMMONO"] = parseFloat(record[80])
-	iris.RawData["C20_COUPSENF"] = parseFloat(record[81])
-	iris.RawData["C20_NE24F1"] = parseFloat(record[82])
-	iris.RawData["C20_NE24F2"] = parseFloat(record[83])
-	iris.RawData["C20_NE24F3"] = parseFloat(record[84])
-	iris.RawData["C20_NE24F4P"] = parseFloat(record[85])
-	iris.RawData["C20_MEN"] = parseFloat(record[86])
-	iris.RawData["C20_MENPSEUL"] = parseFloat(record[87])
-	iris.RawData["C20_MENSFAM"] = parseFloat(record[88])
-	iris.RawData["C20_MENFAM"] = parseFloat(record[89])
-	iris.RawData["P20_ACTOCC"] = parseFloat(record[90])
-	iris.RawData["P20_ETUD1564"] = parseFloat(record[91])
-	iris.RawData["P20_LOG"] = parseFloat(record[92])
-	iris.RawData["P20_RP"] = parseFloat(record[93])
-	iris.RawData["P20_RSECOCC"] = parseFloat(record[94])
-	iris.RawData["P20_LOGVAC"] = parseFloat(record[95])
-	iris.RawData["P20_MAISON"] = parseFloat(record[96])
-	iris.RawData["P20_APPART"] = parseFloat(record[97])
-	iris.RawData["P20_RP_1P"] = parseFloat(record[98])
-	iris.RawData["P20_RP_2P"] = parseFloat(record[99])
-	iris.RawData["P20_RP_3P"] = parseFloat(record[100])
-	iris.RawData["P20_RP_4P"] = parseFloat(record[101])
-	iris.RawData["P20_RP_5PP"] = parseFloat(record[102])
-	iris.RawData["P20_RP_ACH19"] = parseFloat(record[103])
-	iris.RawData["P20_RP_ACH45"] = parseFloat(record[104])
-	iris.RawData["P20_RP_ACH70"] = parseFloat(record[105])
-	iris.RawData["P20_RP_ACH90"] = parseFloat(record[106])
-	iris.RawData["P20_RP_ACH05"] = parseFloat(record[107])
-	iris.RawData["P20_RP_ACH17"] = parseFloat(record[108])
-	iris.RawData["P20_PMEN_ANEM0002"] = parseFloat(record[109])
-	iris.RawData["P20_PMEN_ANEM0204"] = parseFloat(record[110])
-	iris.RawData["P20_PMEN_ANEM0509"] = parseFloat(record[111])
-	iris.RawData["P20_PMEN_ANEM10P"] = parseFloat(record[112])
-	iris.RawData["P20_RP_PROP"] = parseFloat(record[113])
-	iris.RawData["P20_RP_LOC"] = parseFloat(record[114])
-	iris.RawData["P20_RP_GARL"] = parseFloat(record[115])
-	iris.RawData["P20_RP_VOIT1P"] = parseFloat(record[116])
-	iris.RawData["P20_RP_VOIT1"] = parseFloat(record[117])
-	iris.RawData["P20_RP_VOIT2P"] = parseFloat(record[118])
+	iris.RawData["families_only_number"] = parseFloat(record[78])
+	iris.RawData["families_with_kids"] = parseFloat(record[79])
+	iris.RawData["families_monoparental"] = parseFloat(record[80])
+	iris.RawData["families_without_kids"] = parseFloat(record[81])
+	iris.RawData["families_with_1_kids_under_25"] = parseFloat(record[82])
+	iris.RawData["families_with_2_kids_under_25"] = parseFloat(record[83])
+	iris.RawData["families_with_3_kids_under_25"] = parseFloat(record[84])
+	iris.RawData["families_with_4p_kids_under_25"] = parseFloat(record[85])
+	iris.RawData["families_number"] = parseFloat(record[86])
+	iris.RawData["families_one_person"] = parseFloat(record[87])
+	iris.RawData["families_living_without_family"] = parseFloat(record[88])
+	iris.RawData["families_living_with_family"] = parseFloat(record[89])
+	iris.RawData["employees_number"] = parseFloat(record[90])
+	iris.RawData["students_number"] = parseFloat(record[91])
+	iris.RawData["housing_total"] = parseFloat(record[92])
+	iris.RawData["housing_primary_residence"] = parseFloat(record[93])
+	iris.RawData["housing_secondary_residence"] = parseFloat(record[94])
+	iris.RawData["housing_empty_residence"] = parseFloat(record[95])
+	iris.RawData["housing_houses"] = parseFloat(record[96])
+	iris.RawData["housing_apartments"] = parseFloat(record[97])
+	iris.RawData["housing_rooms_1_rooms"] = parseFloat(record[98])
+	iris.RawData["housing_rooms_2_rooms"] = parseFloat(record[99])
+	iris.RawData["housing_rooms_3_rooms"] = parseFloat(record[100])
+	iris.RawData["housing_rooms_4_rooms"] = parseFloat(record[101])
+	iris.RawData["housing_rooms_5p_rooms"] = parseFloat(record[102])
+	iris.RawData["housing_houses_constructed_before_19"] = parseFloat(record[103])
+	iris.RawData["housing_houses_constructed_19_45"] = parseFloat(record[104])
+	iris.RawData["housing_houses_constructed_46_70"] = parseFloat(record[105])
+	iris.RawData["housing_houses_constructed_71_90"] = parseFloat(record[106])
+	iris.RawData["housing_houses_constructed_91_05"] = parseFloat(record[107])
+	iris.RawData["housing_houses_constructed_06_17"] = parseFloat(record[108])
+	iris.RawData["housing_moved_since_0_2_years"] = parseFloat(record[109])
+	iris.RawData["housing_moved_since_2_4_years"] = parseFloat(record[110])
+	iris.RawData["housing_moved_since_5_9_years"] = parseFloat(record[111])
+	iris.RawData["housing_moved_since_10p_years"] = parseFloat(record[112])
+	iris.RawData["housing_owners"] = parseFloat(record[113])
+	iris.RawData["housing_renters"] = parseFloat(record[114])
+	iris.RawData["housing_with_parkings"] = parseFloat(record[115])
+	iris.RawData["housing_with_atleast_1_cars"] = parseFloat(record[116])
+	iris.RawData["housing_with_1_cars"] = parseFloat(record[117])
+	iris.RawData["housing_with_2p_cars"] = parseFloat(record[118])
 
 	// Set total population
-	iris.TotalPopulation = iris.RawData["P20_POP"]
+	iris.TotalPopulation = iris.RawData["population_total"]
 
 	return iris
 }

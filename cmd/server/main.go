@@ -14,6 +14,7 @@ func main() {
 	// Get the absolute path to the CSV files
 	businessCSVPath := filepath.Join("./", "data", "StockEtablissement_open_only_and_geo_and_names.csv")
 	irisCSVPath := filepath.Join("./", "data", "iris-data-with-polygon-coord-standard-with-area-and-calculations.csv")
+	communeCSVPath := filepath.Join("./", "data", "commune_from_iris_completed_mysql_polygons-04092024.csv")
 	qpCSVPath := filepath.Join("./", "data", "final_special_zones-06092024.csv")
 
 	businessAbsPath, err := filepath.Abs(businessCSVPath)
@@ -31,6 +32,11 @@ func main() {
 		log.Fatalf("Error getting absolute path for QP CSV: %v", err)
 	}
 
+	communeAbsPath, err := filepath.Abs(communeCSVPath)
+	if err != nil {
+		log.Fatalf("Error getting absolute path for commune CSV: %v", err)
+	}
+
 	// Check if the CSV files exist
 	if _, err := os.Stat(businessAbsPath); os.IsNotExist(err) {
 		log.Fatalf("Business CSV file not found at: %s", businessAbsPath)
@@ -43,11 +49,16 @@ func main() {
 		log.Fatalf("QP CSV file not found at: %s", qpAbsPath)
 	}
 
+	if _, err := os.Stat(communeAbsPath); os.IsNotExist(err) {
+		log.Fatalf("Commune CSV file not found at: %s", communeAbsPath)
+	}
+
 	log.Printf("Using business CSV file at: %s", businessAbsPath)
 	log.Printf("Using IRIS CSV file at: %s", irisAbsPath)
 	log.Printf("Using QP CSV file at: %s", qpAbsPath)
+	log.Printf("Using commune CSV file at: %s", communeAbsPath)
 	// Initialize services and handlers
-	csvService := services.NewCSVService(businessAbsPath, irisAbsPath, qpAbsPath)
+	csvService := services.NewCSVService(businessAbsPath, irisAbsPath, qpAbsPath, communeAbsPath)
 	searchHandler := handlers.NewSearchHandler(csvService)
 	irisHandler := handlers.NewIrisHandler(csvService)
 
