@@ -380,81 +380,28 @@ func (s *CSVService) writeIrisResultsToFile(response *models.IrisResponse) error
 	return nil
 }
 
-// calculateIntersectionArea calculates the area of intersection between two polygons
-// func calculateIntersectionArea(requestPoly, irisPoly *geom.Polygon) float64 {
-// 	// Get the bounds of both polygons
-// 	bounds1 := requestPoly.Bounds()
-// 	bounds2 := irisPoly.Bounds()
-
-// 	// Quick check if polygons don't overlap
-// 	if !bounds1.Overlaps(geom.XY, bounds2) {
-// 		return 0
-// 	}
-
-// 	// Get the outer rings of both polygons
-// 	requestRing := requestPoly.LinearRing(0)
-// 	irisRing := irisPoly.LinearRing(0)
-
-// 	// Create intersection polygon
-// 	intersection := geom.NewPolygon(geom.XY)
-	
-// 	// Calculate intersection using geom's built-in functionality
-// 	coords := make([]geom.Coord, 0)
-
-// 	// Check if any IRIS points are in the request polygon
-// 	for _, coord := range irisRing.Coords() {
-// 		if xy.IsPointInRing(geom.XY, coord, requestRing.FlatCoords()) {
-// 			coords = append(coords, coord)
-// 		}
-// 	}
-
-// 	// Check if any request points are in the IRIS polygon
-// 	for _, coord := range requestRing.Coords() {
-// 		if xy.IsPointInRing(geom.XY, coord, irisRing.FlatCoords()) {
-// 			coords = append(coords, coord)
-// 		}
-// 	}
-
-// 	// If we have intersection points, create the intersection polygon
-// 	if len(coords) > 0 {
-// 		coords = append(coords, coords[0]) // Close the ring
-// 		intersection.MustSetCoords([][]geom.Coord{coords})
-// 		return intersection.Area()
-// 	}
-
-// 	return 0
-// }
-
 func calculateIntersectionArea(requestPoly, irisPoly geom2.Geometry) float64 {
-
-	//first check if disjoint
-	if _, err := geom2.Disjoint(requestPoly, irisPoly); err != nil {
+	// First check if they intersect at all - this is the fastest check
+	if !geom2.Intersects(requestPoly, irisPoly) {
 		return 0
 	}
 
-	//check if 100% contained
-	if _, err := geom2.Contains(requestPoly, irisPoly); err != nil {
-		return 100
+	// Check for exact equality - this is also a fast check
+	if equals, err := geom2.Equals(requestPoly, irisPoly); err == nil && equals {
+		return irisPoly.Area()
 	}
 
-	if _, err := geom2.Equals(requestPoly, irisPoly); err != nil {
-		return 100
+	// Check if one contains the other - this is faster than checking both directions
+	if contains, err := geom2.Contains(requestPoly, irisPoly); err == nil && contains {
+		return irisPoly.Area()
 	}
 
-	if _, err := geom2.Overlaps(requestPoly, irisPoly); err != nil {
-		return 100
+	// If we get here, we need to calculate the actual intersection area
+	intersection, err := geom2.Intersection(requestPoly, irisPoly)
+	if err != nil {
+		return 0
 	}
-	
-	// check if intersection
-	if geom2.Intersects(requestPoly, irisPoly) {
-		intersection, err := geom2.Intersection(requestPoly, irisPoly)
-		if err != nil {
-			return 0
-		}
-		return intersection.Area()
-	}
-	
-	return 0
+	return intersection.Area()
 }
 
 // calculateIntersectionPercentage calculates the percentage of intersection between two polygons
@@ -575,8 +522,8 @@ func (s *CSVService) loadQPData() ([]struct {
 	return qpData, nil
 }
 
-// loadCommuneData loads commune data from the CSV file
-func (s *CSVService) loadCommuneData() (map[string]*models.CommuneData, error) {
+// loadCommuneData loads commune data from the CSV file for specific commune codes
+func (s *CSVService) loadCommuneData(communeCodes map[string]bool) (map[string]*models.CommuneData, error) {
 	file, err := os.Open(s.communeFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("error opening commune CSV file: %v", err)
@@ -608,11 +555,17 @@ func (s *CSVService) loadCommuneData() (map[string]*models.CommuneData, error) {
 			continue
 		}
 
+		communeCode := record[0]
+		// Skip if this commune is not in our target set
+		if !communeCodes[communeCode] {
+			continue
+		}
+
 		// Create CommuneData struct with values from the record
-		communeData[record[0]] = &models.CommuneData{
+		communeData[communeCode] = &models.CommuneData{
 			// id is the line number
 			ID: strconv.Itoa(lineNumber),
-			CommuneCode: record[0],
+			CommuneCode: communeCode,
 			Population: parseFloat(record[1]),
 			CommuneName: record[len(record)-5],
 			PostalCode:  record[len(record)-6],
@@ -643,19 +596,7 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		return nil, fmt.Errorf("error loading IRIS data: %v", err)
 	}
 
-	// Load commune data
-	communeData, err := s.loadCommuneData()
-	if err != nil {
-		return nil, fmt.Errorf("error loading commune data: %v", err)
-	}
-	
-	// Load QP data
-	qpData, err := s.loadQPData()
-	if err != nil {
-		return nil, fmt.Errorf("error loading QP data: %v", err)
-	}
-
-	// Calculate intersection and aggregate data
+	// Initialize response with IRIS data
 	response := &models.IrisResponse{
 		Data: make(map[string]float64),
 		Administrative: models.AdministrativeData{
@@ -665,8 +606,11 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		},
 	}
 
-	// Process each IRIS zone
+	// Track intersecting communes to load only relevant ones
+	intersectingCommunes := make(map[string]bool)
 	intersectingZones := 0
+
+	// First pass: Process IRIS zones and collect intersecting communes
 	for _, iris := range irisData {
 		if iris.Polygon == nil {
 			continue
@@ -677,29 +621,49 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		if inclusionPercentage == 0 {
 			continue
 		}
-		if inclusionPercentage > 0 {
-			intersectingZones++
-			// Aggregate data with inclusion percentage
-			aggregateIrisData(response, iris, inclusionPercentage)
 
-			// Add corresponding commune data if available
-			if communeValue, exists := communeData[iris.COM]; exists {
-				communeInclusionPercentage := calculateIntersectionPercentage(&polygon, communeValue.Polygon)
-				if communeInclusionPercentage == 0 {
-					continue
-				}
-				// append only if it's not already in the array
-				if !slices.Contains(response.Administrative.Communes, *communeValue) {
-					communeValue.Percentage = communeInclusionPercentage
-					response.Administrative.Communes = append(response.Administrative.Communes, *communeValue)
-					// add postal code data
-					response.Administrative.PostalCodes = append(response.Administrative.PostalCodes, models.PostalCodeData{
-						PostalCode: communeValue.PostalCode,
-						Percentage: communeInclusionPercentage,
-					})
-				}
+		intersectingZones++
+		// Aggregate data with inclusion percentage
+		aggregateIrisData(response, iris, inclusionPercentage)
+		
+		// Track this commune for later processing
+		intersectingCommunes[iris.COM] = true
+	}
+
+	if intersectingZones == 0 {
+		return nil, fmt.Errorf("no intersecting zones found")
+	}
+
+	// Load only relevant commune data
+	communeData, err := s.loadCommuneData(intersectingCommunes)
+	if err != nil {
+		return nil, fmt.Errorf("error loading commune data: %v", err)
+	}
+
+	// Process communes that had intersecting IRIS zones
+	for communeCode := range intersectingCommunes {
+		if communeValue, exists := communeData[communeCode]; exists {
+			communeInclusionPercentage := calculateIntersectionPercentage(&polygon, communeValue.Polygon)
+			if communeInclusionPercentage == 0 {
+				continue
+			}
+			// append only if it's not already in the array
+			if !slices.Contains(response.Administrative.Communes, *communeValue) {
+				communeValue.Percentage = communeInclusionPercentage
+				response.Administrative.Communes = append(response.Administrative.Communes, *communeValue)
+				// add postal code data
+				response.Administrative.PostalCodes = append(response.Administrative.PostalCodes, models.PostalCodeData{
+					PostalCode: communeValue.PostalCode,
+					Percentage: communeInclusionPercentage,
+				})
 			}
 		}
+	}
+
+	// Load and process QP data
+	qpData, err := s.loadQPData()
+	if err != nil {
+		return nil, fmt.Errorf("error loading QP data: %v", err)
 	}
 
 	// Process QP data
@@ -727,10 +691,6 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 	// Calculate criminality data if service is available
 	if s.criminalityService != nil {
 		response.Criminality = *s.criminalityService.CalculateCriminality(response.Administrative.Communes)
-	}
-
-	if intersectingZones == 0 {
-		return nil, fmt.Errorf("no intersecting zones found")
 	}
 
 	log.Printf("Found %d intersecting zones", intersectingZones)
