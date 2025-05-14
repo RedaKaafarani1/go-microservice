@@ -1,10 +1,11 @@
 package models
 
 import (
+	"fmt"
 	"math"
 
+	geom2 "github.com/peterstace/simplefeatures/geom"
 	"github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/xy"
 )
 
 // Point represents a geographical point with latitude and longitude
@@ -104,47 +105,27 @@ func NewSpatialIndex(businesses []*Business) *SpatialIndex {
 	}
 }
 
-// Query returns all businesses that are within the given polygon
-func (s *SpatialIndex) Query(polygon *geom.Polygon) []*Business {
+// Query returns all businesses that are within the given geometry
+func (s *SpatialIndex) Query(geometry geom2.Geometry) []*Business {
 	if len(s.businesses) == 0 {
-		return nil
-	}
-
-	// Get polygon bounds for quick filtering
-	polyBounds := polygon.Bounds()
-	if polyBounds == nil {
-		return nil
-	}
-
-	// Quick bounds check
-	if !s.bounds.Overlaps(geom.XY, polyBounds) {
 		return nil
 	}
 
 	// Pre-allocate result slice with reasonable capacity
 	results := make([]*Business, 0, len(s.businesses)/4)
 
-	// Create a point for reuse
-	point := geom.NewPoint(geom.XY)
-
 	// Check each business
 	for _, business := range s.businesses {
-		// Quick bounds check for each point
-		if business.Longitude < polyBounds.Min(0) || business.Longitude > polyBounds.Max(0) ||
-			business.Latitude < polyBounds.Min(1) || business.Latitude > polyBounds.Max(1) {
+		wkt := fmt.Sprintf("POINT(%f %f)", business.Longitude, business.Latitude)
+		point, err := geom2.UnmarshalWKT(wkt)
+		if err != nil {
 			continue
 		}
-
-		// Set point coordinates
-		point.MustSetCoords(geom.Coord{business.Longitude, business.Latitude})
-
-		// Check if point is within polygon using IsPointInRing
-		ringCoords := make([]float64, 0, len(polygon.Coords()[0])*2)
-		for _, coord := range polygon.Coords()[0] {
-			ringCoords = append(ringCoords, coord[0], coord[1])
+		contains, err := geom2.Contains(geometry, point)
+		if err != nil {
+			continue
 		}
-		
-		if xy.IsPointInRing(geom.XY, point.Coords(), ringCoords) {
+		if contains {
 			results = append(results, business)
 		}
 	}
@@ -188,7 +169,7 @@ type IrisData struct {
 	CollectiveDwellings float64 `json:"collective_dwellings"`
 
 	// Geographic data
-	Polygon *geom.Polygon `json:"polygon"`
+	Polygon *geom2.Geometry `json:"polygon"`
 	Area    float64       `json:"area"`
 
 	// Family data
@@ -241,7 +222,9 @@ type CommuneData struct {
 	CommuneName  string  `json:"commune_name"`
 	PostalCode   string  `json:"postal_code"`
 	Percentage   float64 `json:"percentage"`
-	Population   float64 `json:"population"`
+	Population   float64 `json:"-"`
+	SurfaceArea  float64 `json:"-"`
+	Polygon *geom2.Geometry `json:"-"`
 }
 
 type PostalCodeData struct {
@@ -262,6 +245,9 @@ type CriminalityData struct {
 	CrimesTotal                  float64 `json:"crimes_total"`
 	PercentageCoveredCrimes      float64 `json:"percentage_covered_crimes"`
 	PercentageRelativeToDepartmental float64 `json:"percentage_relative_to_departmental"`
+	CoveredArea 				 float64 `json:"-"`
+	PartialCoveredArea			 float64 `json:"-"`
+	CoveredResidence			 float64 `json:"-"`
 }
 
 // CriminalityResponse represents the complete criminality statistics response

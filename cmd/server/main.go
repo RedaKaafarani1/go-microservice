@@ -6,16 +6,17 @@ import (
 	"os"
 	"path/filepath"
 
+	"csv-processor/internal/config"
 	"csv-processor/internal/handlers"
 	"csv-processor/internal/services"
 )
 
 func main() {
 	// Get the absolute path to the CSV files
-	businessCSVPath := filepath.Join("./", "data", "StockEtablissement_open_only_and_geo_and_names.csv")
-	irisCSVPath := filepath.Join("./", "data", "iris-data-with-polygon-coord-standard-with-area-and-calculations.csv")
-	communeCSVPath := filepath.Join("./", "data", "commune_from_iris_completed_mysql_polygons-04092024.csv")
-	qpCSVPath := filepath.Join("./", "data", "final_special_zones-06092024.csv")
+	businessCSVPath := config.GetDataFilePath("StockEtablissement_open_only_and_geo_and_names.csv")
+	irisCSVPath := config.GetDataFilePath("iris-data-with-polygon-coord-standard-with-area-and-calculations.csv")
+	communeCSVPath := config.GetDataFilePath("commune_from_iris_completed_mysql_polygons-04092024.csv")
+	qpCSVPath := config.GetDataFilePath("final_special_zones-06092024.csv")
 
 	businessAbsPath, err := filepath.Abs(businessCSVPath)
 	if err != nil {

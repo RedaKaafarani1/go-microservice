@@ -4,6 +4,8 @@ github.com/alecthomas/repr v0.4.0 h1:GhI2A8MACjfegCPVq9f1FLvIBS+DrQ2KQBFZP1iFzXc
 github.com/alecthomas/repr v0.4.0/go.mod h1:Fr0507jx4eOXV7AlPV6AVZLYrLIuIeSOWtW57eE/O/4=
 github.com/hexops/gotextdiff v1.0.3 h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=
 github.com/hexops/gotextdiff v1.0.3/go.mod h1:pSWU5MAI3yDq+fZBTazCSJysOMbxWL1BSow5/V2vxeg=
+github.com/peterstace/simplefeatures v0.53.0 h1:D9VbHcdbVrxp4r5dnMU3ltfV6yFt+dyK/uiEV5p/IOk=
+github.com/peterstace/simplefeatures v0.53.0/go.mod h1:nosSwG+GcVmAUBoxFWoyy1hS1qg0RuX0M9tmqsIzFX8=
 github.com/twpayne/go-geom v1.6.1 h1:iLE+Opv0Ihm/ABIcvQFGIiFBXd76oBIar9drAwHFhR4=
 github.com/twpayne/go-geom v1.6.1/go.mod h1:Kr+Nly6BswFsKM5sd31YaoWS5PeDDH2NftJTK7Gd028=
 github.com/twpayne/go-geos v0.20.1 h1:Z1Itw0ms7bQGkXh7nLo+qrrv5Op3jBJoWmyZ2PMxxr8=

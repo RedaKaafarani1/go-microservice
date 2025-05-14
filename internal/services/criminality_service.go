@@ -7,20 +7,19 @@ import (
 	"strconv"
 	"strings"
 
+	"csv-processor/internal/config"
 	"csv-processor/internal/models"
 )
 
 type CriminalityService struct {
 	communeCrimes     map[string]map[string]float64 // map[commune_code]map[crime_type]rate
 	departmentCrimes  map[string]map[string]float64 // map[department_code]map[crime_type]rate
-	departmentPopulations map[string]float64        // map[department_code]population
 }
 
 func NewCriminalityService() (*CriminalityService, error) {
 	service := &CriminalityService{
 		communeCrimes:     make(map[string]map[string]float64),
 		departmentCrimes:  make(map[string]map[string]float64),
-		departmentPopulations: make(map[string]float64),
 	}
 
 	if err := service.loadCommuneCrimes(); err != nil {
@@ -35,7 +34,7 @@ func NewCriminalityService() (*CriminalityService, error) {
 }
 
 func (s *CriminalityService) loadCommuneCrimes() error {
-	file, err := os.Open("./data/crimes_per_commune.csv")
+	file, err := os.Open(config.GetDataFilePath("crimes_per_commune.csv"))
 	if err != nil {
 		return err
 	}
@@ -74,14 +73,20 @@ func (s *CriminalityService) loadCommuneCrimes() error {
 				continue
 			}
 			
-			// Only store non-empty values
+			// Initialize rate as 0
+			rate := 0.0
+			
+			// If the field is not empty, parse it as float
 			if record[i+1] != "" {
-				rate, err := strconv.ParseFloat(record[i+1], 64)
+				var err error
+				rate, err = strconv.ParseFloat(record[i+1], 64)
 				if err != nil {
 					continue
 				}
-				s.communeCrimes[communeCode][crimeType] = rate
 			}
+			
+			// Always store the rate, even if it's 0
+			s.communeCrimes[communeCode][crimeType] = rate
 		}
 	}
 
@@ -89,7 +94,7 @@ func (s *CriminalityService) loadCommuneCrimes() error {
 }
 
 func (s *CriminalityService) loadDepartmentCrimes() error {
-	file, err := os.Open("./data/dep-crime-data.csv")
+	file, err := os.Open(config.GetDataFilePath("dep-indexed-crime-data.csv"))
 	if err != nil {
 		return err
 	}
@@ -104,8 +109,8 @@ func (s *CriminalityService) loadDepartmentCrimes() error {
 		return err
 	}
 
-	// Skip first column (Code.département)
-	crimeTypes := header[1:]
+	// Skip first two columns (Code.département and POP)
+	crimeTypes := header[2:]
 
 	for {
 		record, err := reader.Read()
@@ -124,15 +129,21 @@ func (s *CriminalityService) loadDepartmentCrimes() error {
 			s.departmentCrimes[departmentCode] = make(map[string]float64)
 		}
 
+		population, err := strconv.ParseFloat(record[1], 64)
+		if err != nil {
+			continue
+		}
+		s.departmentCrimes[departmentCode]["population"] = population
+
 		// Process each crime type
 		for i, crimeType := range crimeTypes {
-			if i+1 >= len(record) {
+			if i+2 >= len(record) {
 				continue
 			}
 			
 			// Only store non-empty values
-			if record[i+1] != "" {
-				rate, err := strconv.ParseFloat(record[i+1], 64)
+			if record[i+2] != "" {
+				rate, err := strconv.ParseFloat(record[i+2], 64)
 				if err != nil {
 					continue
 				}
@@ -144,31 +155,39 @@ func (s *CriminalityService) loadDepartmentCrimes() error {
 	return nil
 }
 
+func (s *CriminalityService) extractDepartmentCodeFromInseeCode(codeInsee string) string {
+	// Handle Corsican departments: 2A and 2B are special cases
+	if strings.HasPrefix(codeInsee, "20") {
+		if len(codeInsee) > 2 && (codeInsee[2] == 'A' || codeInsee[2] == 'B') {
+			return codeInsee[:3]
+		}
+		return "2A"
+	}
+
+	// Return the first two characters for most cases (mainland France)
+	return codeInsee[:2]
+}
+
 func (s *CriminalityService) CalculateCriminality(communes []models.CommuneData) *models.CriminalityResponse {
 	response := &models.CriminalityResponse{
-		DrugUsage: &models.CriminalityData{},
-		VehicleTheft: &models.CriminalityData{},
-		ArmedRobberies: &models.CriminalityData{},
-		HomeBurglaries: &models.CriminalityData{},
-		SexualViolence: &models.CriminalityData{},
-		DrugTrafficking: &models.CriminalityData{},
-		VoluntaryInjuries: &models.CriminalityData{},
-		TheftFromVehicles: &models.CriminalityData{},
-		OtherVoluntaryInjuries: &models.CriminalityData{},
-		TheftOfVehicleAccessories: &models.CriminalityData{},
-		IntrafamilyVoluntaryInjuries: &models.CriminalityData{},
-		VoluntaryDamageAndVandalism: &models.CriminalityData{},
-		ViolentRobberiesWithoutWeapon: &models.CriminalityData{},
-		RobberiesWithoutViolenceAgainstPersons: &models.CriminalityData{},
+		DrugUsage: nil,
+		VehicleTheft: nil,
+		ArmedRobberies: nil,
+		HomeBurglaries: nil,
+		SexualViolence: nil,
+		DrugTrafficking: nil,
+		VoluntaryInjuries: nil,
+		TheftFromVehicles: nil,
+		OtherVoluntaryInjuries: nil,
+		TheftOfVehicleAccessories: nil,
+		IntrafamilyVoluntaryInjuries: nil,
+		VoluntaryDamageAndVandalism: nil,
+		ViolentRobberiesWithoutWeapon: nil,
+		RobberiesWithoutViolenceAgainstPersons: nil,
 	}
 
 	// Map to store accumulated crime data
 	crimeData := make(map[string]*models.CriminalityData)
-	hasData := make(map[string]bool) // Track which crime types have data
-
-	// Track total population and covered population
-	totalPopulation := 0.0
-	coveredPopulation := 0.0
 
 	// Track department data
 	departmentData := make(map[string]struct {
@@ -179,155 +198,150 @@ func (s *CriminalityService) CalculateCriminality(communes []models.CommuneData)
 	// Process each commune
 	for _, commune := range communes {
 		communeCode := strings.TrimLeft(commune.CommuneCode, "0")
-		departmentCode := communeCode[:2] // First two digits of INSEE code
+		departmentCode := s.extractDepartmentCodeFromInseeCode(communeCode)
 
-		// Initialize department data if not exists
-		if _, exists := departmentData[departmentCode]; !exists {
-			departmentData[departmentCode] = struct {
-				totalCrimes map[string]float64
-				totalPopulation float64
-			}{
-				totalCrimes: make(map[string]float64),
-				totalPopulation: 0,
+		// Load department data
+		if departmentCrimes, exists := s.departmentCrimes[departmentCode]; exists {
+			data := departmentData[departmentCode]
+			if data.totalCrimes == nil {
+				data.totalCrimes = make(map[string]float64)
 			}
+			data.totalCrimes = departmentCrimes
+			data.totalPopulation = departmentCrimes["population"]
+			departmentData[departmentCode] = data
 		}
 
 		// Get commune crimes
 		communeCrimes, hasCommuneCrimes := s.communeCrimes[communeCode]
 		if hasCommuneCrimes {
-			// Get population from IRIS data (assuming it's stored in the commune data)
+			// Calculate population and area for this commune
 			population := commune.Population * commune.Percentage / 100
-			coveredPopulation += population
+			area := commune.SurfaceArea * commune.Percentage / 100
 
 			for crimeType, rate := range communeCrimes {
 				if _, exists := crimeData[crimeType]; !exists {
 					crimeData[crimeType] = &models.CriminalityData{
 						IsTotal: true,
-						CrimesTotal: 0,
-						PercentageCoveredCrimes: 100,
+						CrimesTotal: population * rate / 1000,
+						CoveredArea: area,
+						PartialCoveredArea: func() float64 {
+							if rate > 0 {
+								return area
+							}
+							return 0
+						}(),
+						CoveredResidence: population,
+						PercentageRelativeToDepartmental: 0,
 					}
+					if rate == 0 {
+						crimeData[crimeType].IsTotal = false
+					}
+				} else {
+					if rate == 0 {
+						crimeData[crimeType].IsTotal = false
+					}
+					crimeData[crimeType].CoveredArea += area
+					// Only add to PartialCoveredArea if there are crimes (rate > 0)
+					if rate > 0 {
+						crimeData[crimeType].PartialCoveredArea += area
+					}
+					crimeData[crimeType].CrimesTotal += population * rate / 1000
+					crimeData[crimeType].CoveredResidence += population
 				}
-
-				// Calculate weighted crime rate based on population
-				weightedCrimes := (rate * population) / 1000 // rate is per 1000 inhabitants
-				crimeData[crimeType].CrimesTotal += weightedCrimes
-				hasData[crimeType] = true
-
-				// Add to department totals
-				deptData := departmentData[departmentCode]
-				deptData.totalCrimes[crimeType] += weightedCrimes
-				deptData.totalPopulation += population
-				departmentData[departmentCode] = deptData
 			}
 		}
-
-		totalPopulation += commune.Population * commune.Percentage / 100
 	}
 
-	// Calculate final rates and compare with department averages
+	// Sum up department data
+	finalDepartmentData := make(map[string]struct {
+		totalCrimes map[string]float64
+		totalPopulation float64
+	})
+
+	for _, data := range departmentData {
+		for crimeType, rate := range data.totalCrimes {
+			if crimeType == "population" {
+				continue
+			}
+			deptData := finalDepartmentData[crimeType]
+			if deptData.totalCrimes == nil {
+				deptData.totalCrimes = make(map[string]float64)
+			}
+			deptData.totalCrimes[crimeType] += rate
+			deptData.totalPopulation += data.totalPopulation
+			finalDepartmentData[crimeType] = deptData
+		}
+	}
+
+	// Calculate final rates and percentages
 	for crimeType, data := range crimeData {
-		if !hasData[crimeType] {
-			data.IsTotal = false
-			continue
-		}
+		// Calculate departmental criminality rate
+		departmentalCriminalityRate := func() float64 {
+			if deptData, exists := finalDepartmentData[crimeType]; exists {
+				if deptData.totalPopulation > 0 {
+					return (deptData.totalCrimes[crimeType] * 1000) / deptData.totalPopulation
+				}
+			}
+			return 0
+		}()
 
-		// Calculate crime rate per 1000 inhabitants for the area
-		areaCrimeRate := (data.CrimesTotal * 1000) / totalPopulation
+		// Calculate criminality rate for selected area
+		criminalityRateForArea := func() float64 {
+			if data.CoveredResidence > 0 {
+				return (data.CrimesTotal * 1000) / data.CoveredResidence
+			}
+			return 0
+		}()
 
-		// Find the department with the highest population coverage
-		var maxDeptCode string
-		var maxDeptPopulation float64
-		for deptCode, deptData := range departmentData {
-			if deptData.totalPopulation > maxDeptPopulation {
-				maxDeptPopulation = deptData.totalPopulation
-				maxDeptCode = deptCode
+		// Calculate percentage covered crimes
+		data.PercentageCoveredCrimes = func() float64 {
+			if data.CoveredArea > 0 {
+				return 100 * data.PartialCoveredArea / data.CoveredArea
+			}
+			return 0
+		}()
+
+		if data.PercentageCoveredCrimes > 0 {
+			// Calculate relative percentage to departmental rate
+			if departmentalCriminalityRate > 0 {
+				data.PercentageRelativeToDepartmental = ((criminalityRateForArea - departmentalCriminalityRate) / departmentalCriminalityRate) * 100
+			}
+
+			// Set final crime rate
+			data.CrimesTotal = criminalityRateForArea
+
+			// Map to response fields based on crime type
+			switch crimeType {
+			case "drug_usage":
+				response.DrugUsage = data
+			case "vehicle_theft":
+				response.VehicleTheft = data
+			case "armed_robberies":
+				response.ArmedRobberies = data
+			case "home_burglaries":
+				response.HomeBurglaries = data
+			case "sexual_violence":
+				response.SexualViolence = data
+			case "drug_trafficking":
+				response.DrugTrafficking = data
+			case "voluntary_injuries":
+				response.VoluntaryInjuries = data
+			case "theft_from_vehicles":
+				response.TheftFromVehicles = data
+			case "other_voluntary_injuries":
+				response.OtherVoluntaryInjuries = data
+			case "theft_of_vehicle_accessories":
+				response.TheftOfVehicleAccessories = data
+			case "intrafamily_voluntary_injuries":
+				response.IntrafamilyVoluntaryInjuries = data
+			case "voluntary_damage_and_vandalism":
+				response.VoluntaryDamageAndVandalism = data
+			case "violent_robberies_without_weapon":
+				response.ViolentRobberiesWithoutWeapon = data
+			case "robberies_without_violence_against_persons":
+				response.RobberiesWithoutViolenceAgainstPersons = data
 			}
 		}
-
-		// Get department crime rate from the CSV data
-		if deptCrimes, exists := s.departmentCrimes[maxDeptCode]; exists {
-			if deptRate, exists := deptCrimes[crimeType]; exists {
-				// Calculate relative percentage using the department rate from CSV
-				data.PercentageRelativeToDepartmental = ((areaCrimeRate - deptRate) / deptRate) * 100
-			}
-		}
-
-		// Calculate percentage covered
-		if totalPopulation > 0 {
-			data.PercentageCoveredCrimes = (coveredPopulation / totalPopulation) * 100
-		}
-	}
-
-	// Map crime data to response fields
-	if data, exists := crimeData["drug_usage"]; exists && hasData["drug_usage"] {
-		response.DrugUsage = data
-	} else {
-		response.DrugUsage = nil
-	}
-	if data, exists := crimeData["vehicle_theft"]; exists && hasData["vehicle_theft"] {
-		response.VehicleTheft = data
-	} else {
-		response.VehicleTheft = nil
-	}
-	if data, exists := crimeData["armed_robberies"]; exists && hasData["armed_robberies"] {
-		response.ArmedRobberies = data
-	} else {
-		response.ArmedRobberies = nil
-	}
-	if data, exists := crimeData["home_burglaries"]; exists && hasData["home_burglaries"] {
-		response.HomeBurglaries = data
-	} else {
-		response.HomeBurglaries = nil
-	}
-	if data, exists := crimeData["sexual_violence"]; exists && hasData["sexual_violence"] {
-		response.SexualViolence = data
-	} else {
-		response.SexualViolence = nil
-	}
-	if data, exists := crimeData["drug_trafficking"]; exists && hasData["drug_trafficking"] {
-		response.DrugTrafficking = data
-	} else {
-		response.DrugTrafficking = nil
-	}
-	if data, exists := crimeData["voluntary_injuries"]; exists && hasData["voluntary_injuries"] {
-		response.VoluntaryInjuries = data
-	} else {
-		response.VoluntaryInjuries = nil
-	}
-	if data, exists := crimeData["theft_from_vehicles"]; exists && hasData["theft_from_vehicles"] {
-		response.TheftFromVehicles = data
-	} else {
-		response.TheftFromVehicles = nil
-	}
-	if data, exists := crimeData["other_voluntary_injuries"]; exists && hasData["other_voluntary_injuries"] {
-		response.OtherVoluntaryInjuries = data
-	} else {
-		response.OtherVoluntaryInjuries = nil
-	}
-	if data, exists := crimeData["theft_of_vehicle_accessories"]; exists && hasData["theft_of_vehicle_accessories"] {
-		response.TheftOfVehicleAccessories = data
-	} else {
-		response.TheftOfVehicleAccessories = nil
-	}
-	if data, exists := crimeData["intrafamily_voluntary_injuries"]; exists && hasData["intrafamily_voluntary_injuries"] {
-		response.IntrafamilyVoluntaryInjuries = data
-	} else {
-		response.IntrafamilyVoluntaryInjuries = nil
-	}
-	if data, exists := crimeData["voluntary_damage_and_vandalism"]; exists && hasData["voluntary_damage_and_vandalism"] {
-		response.VoluntaryDamageAndVandalism = data
-	} else {
-		response.VoluntaryDamageAndVandalism = nil
-	}
-	if data, exists := crimeData["violent_robberies_without_weapon"]; exists && hasData["violent_robberies_without_weapon"] {
-		response.ViolentRobberiesWithoutWeapon = data
-	} else {
-		response.ViolentRobberiesWithoutWeapon = nil
-	}
-	if data, exists := crimeData["robberies_without_violence_against_persons"]; exists && hasData["robberies_without_violence_against_persons"] {
-		response.RobberiesWithoutViolenceAgainstPersons = data
-	} else {
-		response.RobberiesWithoutViolenceAgainstPersons = nil
 	}
 
 	return response

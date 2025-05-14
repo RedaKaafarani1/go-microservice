@@ -17,7 +17,8 @@ import (
 	"csv-processor/internal/models"
 
 	"github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/xy"
+	// "github.com/twpayne/go-geom/xy"
+	geom2 "github.com/peterstace/simplefeatures/geom"
 )
 
 // CSVService handles the business logic for processing the CSV file
@@ -105,6 +106,80 @@ func (s *CSVService) convertGeoJSONToPolygon(geojsonStr string) (*geom.Polygon, 
 	return polygon, nil
 }
 
+func (s *CSVService) convertGeoJSONToGeometry(geojsonStr string) (geom2.Geometry, error) {
+	// First try parsing as a regular Polygon
+	var polygonGeoJSON struct {
+		Type        string          `json:"type"`
+		Coordinates [][][]float64   `json:"coordinates"`
+	}
+
+	if err := json.Unmarshal([]byte(geojsonStr), &polygonGeoJSON); err == nil && polygonGeoJSON.Type == "Polygon" {
+		if len(polygonGeoJSON.Coordinates) == 0 {
+			return geom2.Geometry{}, fmt.Errorf("empty polygon coordinates")
+		}
+
+		// Convert coordinates to geom2.Geometry format
+		coords := polygonGeoJSON.Coordinates[0]
+		flatCoords := make([]float64, len(coords)*2)
+		for i, coord := range coords {
+			flatCoords[i*2] = coord[0]
+			flatCoords[i*2+1] = coord[1]
+		}
+		
+		// Create line string from points
+		lineString := geom2.NewLineString(geom2.NewSequence(flatCoords, geom2.DimXY))
+		if lineString.IsEmpty() {
+			return geom2.Geometry{}, fmt.Errorf("error creating line string")
+		}
+
+		// Create polygon from line string
+		polygon := geom2.NewPolygon([]geom2.LineString{lineString})
+		if polygon.IsEmpty() {
+			return geom2.Geometry{}, fmt.Errorf("error creating polygon")
+		}
+		return polygon.AsGeometry(), nil
+	}
+
+	// If not a Polygon, try parsing as a MultiPolygon
+	var multiPolygonGeoJSON struct {
+		Type        string            `json:"type"`
+		Coordinates [][][][]float64   `json:"coordinates"`
+	}
+
+	if err := json.Unmarshal([]byte(geojsonStr), &multiPolygonGeoJSON); err != nil {
+		return geom2.Geometry{}, fmt.Errorf("error parsing GeoJSON: %v", err)
+	}
+
+	if multiPolygonGeoJSON.Type != "MultiPolygon" {
+		return geom2.Geometry{}, fmt.Errorf("unsupported GeoJSON type: %s", multiPolygonGeoJSON.Type)
+	}
+
+	if len(multiPolygonGeoJSON.Coordinates) == 0 || len(multiPolygonGeoJSON.Coordinates[0]) == 0 {
+		return geom2.Geometry{}, fmt.Errorf("empty MultiPolygon coordinates")
+	}
+
+	// Use the first polygon from the MultiPolygon
+	coords := multiPolygonGeoJSON.Coordinates[0][0]
+	flatCoords := make([]float64, len(coords)*2)
+	for i, coord := range coords {
+		flatCoords[i*2] = coord[0]
+		flatCoords[i*2+1] = coord[1]
+	}
+
+	// Create line string from points
+	lineString := geom2.NewLineString(geom2.NewSequence(flatCoords, geom2.DimXY))
+	if lineString.IsEmpty() {
+		return geom2.Geometry{}, fmt.Errorf("error creating line string")
+	}
+
+	// Create polygon from line string
+	polygon := geom2.NewPolygon([]geom2.LineString{lineString})
+	if polygon.IsEmpty() {
+		return geom2.Geometry{}, fmt.Errorf("error creating polygon from MultiPolygon")
+	}
+	return polygon.AsGeometry(), nil
+}
+
 // writeResultsToFile writes the search results to a JSON file
 func (s *CSVService) writeResultsToFile(businesses []*models.Business, nafCode string) error {
 	// Create results directory if it doesn't exist
@@ -136,10 +211,10 @@ func (s *CSVService) writeResultsToFile(businesses []*models.Business, nafCode s
 
 // SearchBusinesses searches for businesses matching the given criteria
 func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string) ([]*models.Business, error) {
-	// Convert GeoJSON to polygon
-	polygon, err := s.convertGeoJSONToPolygon(geojsonStr)
+	// Convert GeoJSON to geometry
+	geometry, err := s.convertGeoJSONToGeometry(geojsonStr)
 	if err != nil {
-		return nil, fmt.Errorf("error converting GeoJSON to polygon: %v", err)
+		return nil, fmt.Errorf("error converting GeoJSON to geometry: %v", err)
 	}
 
 	// Load only businesses with matching NAF code
@@ -151,8 +226,8 @@ func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string) ([]*mod
 	// Create spatial index with filtered businesses
 	spatialIndex := models.NewSpatialIndex(businesses)
 
-	// Query businesses within polygon
-	results := spatialIndex.Query(polygon)
+	// Query businesses within geometry
+	results := spatialIndex.Query(geometry)
 
 	// Write results to file
 	if err := s.writeResultsToFile(results, nafCode); err != nil {
@@ -263,16 +338,16 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 }
 
 // parsePolygon parses a polygon from a GeoJSON string
-func (s *CSVService) parsePolygon(polygonStr string) *geom.Polygon {
+func (s *CSVService) parsePolygon(polygonStr string) *geom2.Geometry {
 	// Remove any leading/trailing quotes
 	polygonStr = strings.Trim(polygonStr, "\"")
 
-	polygon, err := s.convertGeoJSONToPolygon(polygonStr)
+	polygon, err := s.convertGeoJSONToGeometry(polygonStr)
 	if err != nil {
 		log.Printf("Error parsing polygon: %v", err)
 		return nil
 	}
-	return polygon
+	return &polygon
 }
 
 // writeIrisResultsToFile writes the IRIS data results to a JSON file
@@ -306,54 +381,89 @@ func (s *CSVService) writeIrisResultsToFile(response *models.IrisResponse) error
 }
 
 // calculateIntersectionArea calculates the area of intersection between two polygons
-func calculateIntersectionArea(requestPoly, irisPoly *geom.Polygon) float64 {
-	// Get the bounds of both polygons
-	bounds1 := requestPoly.Bounds()
-	bounds2 := irisPoly.Bounds()
+// func calculateIntersectionArea(requestPoly, irisPoly *geom.Polygon) float64 {
+// 	// Get the bounds of both polygons
+// 	bounds1 := requestPoly.Bounds()
+// 	bounds2 := irisPoly.Bounds()
 
-	// Quick check if polygons don't overlap
-	if !bounds1.Overlaps(geom.XY, bounds2) {
+// 	// Quick check if polygons don't overlap
+// 	if !bounds1.Overlaps(geom.XY, bounds2) {
+// 		return 0
+// 	}
+
+// 	// Get the outer rings of both polygons
+// 	requestRing := requestPoly.LinearRing(0)
+// 	irisRing := irisPoly.LinearRing(0)
+
+// 	// Create intersection polygon
+// 	intersection := geom.NewPolygon(geom.XY)
+	
+// 	// Calculate intersection using geom's built-in functionality
+// 	coords := make([]geom.Coord, 0)
+
+// 	// Check if any IRIS points are in the request polygon
+// 	for _, coord := range irisRing.Coords() {
+// 		if xy.IsPointInRing(geom.XY, coord, requestRing.FlatCoords()) {
+// 			coords = append(coords, coord)
+// 		}
+// 	}
+
+// 	// Check if any request points are in the IRIS polygon
+// 	for _, coord := range requestRing.Coords() {
+// 		if xy.IsPointInRing(geom.XY, coord, irisRing.FlatCoords()) {
+// 			coords = append(coords, coord)
+// 		}
+// 	}
+
+// 	// If we have intersection points, create the intersection polygon
+// 	if len(coords) > 0 {
+// 		coords = append(coords, coords[0]) // Close the ring
+// 		intersection.MustSetCoords([][]geom.Coord{coords})
+// 		return intersection.Area()
+// 	}
+
+// 	return 0
+// }
+
+func calculateIntersectionArea(requestPoly, irisPoly geom2.Geometry) float64 {
+
+	//first check if disjoint
+	if _, err := geom2.Disjoint(requestPoly, irisPoly); err != nil {
 		return 0
 	}
 
-	// Get the outer rings of both polygons
-	requestRing := requestPoly.LinearRing(0)
-	irisRing := irisPoly.LinearRing(0)
+	//check if 100% contained
+	if _, err := geom2.Contains(requestPoly, irisPoly); err != nil {
+		return 100
+	}
 
-	// Create intersection polygon
-	intersection := geom.NewPolygon(geom.XY)
+	if _, err := geom2.Equals(requestPoly, irisPoly); err != nil {
+		return 100
+	}
+
+	if _, err := geom2.Overlaps(requestPoly, irisPoly); err != nil {
+		return 100
+	}
 	
-	// Calculate intersection using geom's built-in functionality
-	coords := make([]geom.Coord, 0)
-
-	// Check if any IRIS points are in the request polygon
-	for _, coord := range irisRing.Coords() {
-		if xy.IsPointInRing(geom.XY, coord, requestRing.FlatCoords()) {
-			coords = append(coords, coord)
+	// check if intersection
+	if geom2.Intersects(requestPoly, irisPoly) {
+		intersection, err := geom2.Intersection(requestPoly, irisPoly)
+		if err != nil {
+			return 0
 		}
-	}
-
-	// Check if any request points are in the IRIS polygon
-	for _, coord := range requestRing.Coords() {
-		if xy.IsPointInRing(geom.XY, coord, irisRing.FlatCoords()) {
-			coords = append(coords, coord)
-		}
-	}
-
-	// If we have intersection points, create the intersection polygon
-	if len(coords) > 0 {
-		coords = append(coords, coords[0]) // Close the ring
-		intersection.MustSetCoords([][]geom.Coord{coords})
 		return intersection.Area()
 	}
-
+	
 	return 0
 }
 
 // calculateIntersectionPercentage calculates the percentage of intersection between two polygons
-func calculateIntersectionPercentage(requestPoly, irisPoly *geom.Polygon) float64 {
+func calculateIntersectionPercentage(requestPoly, irisPoly *geom2.Geometry) float64 {
 	// Calculate intersection area
-	intersectionArea := calculateIntersectionArea(requestPoly, irisPoly)
+	intersectionArea := calculateIntersectionArea(*requestPoly, *irisPoly)
+	if intersectionArea == 0 {
+		return 0
+	}
 	if intersectionArea == 0 {
 		return 0
 	}
@@ -364,8 +474,13 @@ func calculateIntersectionPercentage(requestPoly, irisPoly *geom.Polygon) float6
 		return 0
 	}
 	
-	// Calculate percentage
-	return (intersectionArea / irisArea) * 100
+	percentage := (intersectionArea / irisArea) * 100
+
+	if percentage < 5 {
+		return 0
+	}
+
+	return percentage
 }
 
 // aggregateIrisData aggregates IRIS data with inclusion percentage
@@ -387,7 +502,7 @@ func (s *CSVService) loadQPData() ([]struct {
 	CodeQP string
 	LibQP    string
 	Commune  string
-	Polygon  *geom.Polygon
+	Polygon  *geom2.Geometry
 }, error) {
 	file, err := os.Open(s.qpFilePath)
 	if err != nil {
@@ -410,7 +525,7 @@ func (s *CSVService) loadQPData() ([]struct {
 		CodeQP string
 		LibQP    string
 		Commune  string
-		Polygon  *geom.Polygon
+		Polygon  *geom2.Geometry
 	}
 
 	for {
@@ -447,7 +562,7 @@ func (s *CSVService) loadQPData() ([]struct {
 			CodeQP string
 			LibQP    string
 			Commune  string
-			Polygon  *geom.Polygon
+			Polygon  *geom2.Geometry
 		}{
 			ID: id,
 			CodeQP: codeQP,
@@ -498,8 +613,11 @@ func (s *CSVService) loadCommuneData() (map[string]*models.CommuneData, error) {
 			// id is the line number
 			ID: strconv.Itoa(lineNumber),
 			CommuneCode: record[0],
+			Population: parseFloat(record[1]),
 			CommuneName: record[len(record)-5],
 			PostalCode:  record[len(record)-6],
+			SurfaceArea: parseFloat(record[len(record)-4]),
+			Polygon: s.parsePolygon(record[len(record)-10]),
 		}
 		lineNumber++
 	}
@@ -510,12 +628,12 @@ func (s *CSVService) loadCommuneData() (map[string]*models.CommuneData, error) {
 // GetIrisData retrieves and aggregates IRIS data for the given polygon
 func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error) {
 	// Convert GeoJSON to polygon
-	polygon, err := s.convertGeoJSONToPolygon(geojsonStr)
+	polygon, err := s.convertGeoJSONToGeometry(geojsonStr)
 	if err != nil {
 		return nil, fmt.Errorf("error converting GeoJSON to polygon: %v", err)
 	}
 
-	if polygon == nil {
+	if polygon.IsEmpty() {
 		return nil, fmt.Errorf("failed to create polygon from GeoJSON")
 	}
 
@@ -555,23 +673,29 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		}
 
 		// Calculate intersection percentage
-		inclusionPercentage := calculateIntersectionPercentage(polygon, iris.Polygon)
+		inclusionPercentage := calculateIntersectionPercentage(&polygon, iris.Polygon)
+		if inclusionPercentage == 0 {
+			continue
+		}
 		if inclusionPercentage > 0 {
 			intersectingZones++
 			// Aggregate data with inclusion percentage
 			aggregateIrisData(response, iris, inclusionPercentage)
-			
+
 			// Add corresponding commune data if available
 			if communeValue, exists := communeData[iris.COM]; exists {
+				communeInclusionPercentage := calculateIntersectionPercentage(&polygon, communeValue.Polygon)
+				if communeInclusionPercentage == 0 {
+					continue
+				}
 				// append only if it's not already in the array
 				if !slices.Contains(response.Administrative.Communes, *communeValue) {
-					communeValue.Percentage = inclusionPercentage
-					communeValue.Population = iris.TotalPopulation
+					communeValue.Percentage = communeInclusionPercentage
 					response.Administrative.Communes = append(response.Administrative.Communes, *communeValue)
 					// add postal code data
 					response.Administrative.PostalCodes = append(response.Administrative.PostalCodes, models.PostalCodeData{
 						PostalCode: communeValue.PostalCode,
-						Percentage: inclusionPercentage,
+						Percentage: communeInclusionPercentage,
 					})
 				}
 			}
@@ -585,7 +709,10 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		}
 
 		// Calculate intersection percentage
-		inclusionPercentage := calculateIntersectionPercentage(polygon, qp.Polygon)
+		inclusionPercentage := calculateIntersectionPercentage(&polygon, qp.Polygon)
+		if inclusionPercentage == 0 {
+			continue
+		}
 		if inclusionPercentage > 0 {
 			response.Administrative.SpecialZones = append(response.Administrative.SpecialZones, models.QPData{
 				ID: qp.ID,
