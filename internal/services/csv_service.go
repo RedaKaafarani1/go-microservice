@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/slices"
@@ -606,28 +607,59 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		},
 	}
 
+	// Create channels for results and errors
+	type result struct {
+		iris *models.IrisData
+		percentage float64
+	}
+	results := make(chan result, len(irisData))
+	errors := make(chan error, len(irisData))
+
+	// Create a WaitGroup to wait for all goroutines to finish
+	var wg sync.WaitGroup
+
+	// Process IRIS zones in parallel
+	for _, iris := range irisData {
+		wg.Add(1)
+		go func(iris *models.IrisData) {
+			defer wg.Done()
+			if iris.Polygon == nil {
+				return
+			}
+
+			// Calculate intersection percentage
+			inclusionPercentage := calculateIntersectionPercentage(&polygon, iris.Polygon)
+			if inclusionPercentage > 0 {
+				results <- result{iris: iris, percentage: inclusionPercentage}
+			}
+		}(iris)
+	}
+
+	// Close results channel when all goroutines are done
+	go func() {
+		wg.Wait()
+		close(results)
+		close(errors)
+	}()
+
 	// Track intersecting communes to load only relevant ones
 	intersectingCommunes := make(map[string]bool)
 	intersectingZones := 0
 
-	// First pass: Process IRIS zones and collect intersecting communes
-	for _, iris := range irisData {
-		if iris.Polygon == nil {
-			continue
-		}
-
-		// Calculate intersection percentage
-		inclusionPercentage := calculateIntersectionPercentage(&polygon, iris.Polygon)
-		if inclusionPercentage == 0 {
-			continue
-		}
-
+	// Process results
+	for result := range results {
 		intersectingZones++
 		// Aggregate data with inclusion percentage
-		aggregateIrisData(response, iris, inclusionPercentage)
-		
+		aggregateIrisData(response, result.iris, result.percentage)
 		// Track this commune for later processing
-		intersectingCommunes[iris.COM] = true
+		intersectingCommunes[result.iris.COM] = true
+	}
+
+	// Check for errors
+	for err := range errors {
+		if err != nil {
+			return nil, fmt.Errorf("error processing IRIS data: %v", err)
+		}
 	}
 
 	if intersectingZones == 0 {
