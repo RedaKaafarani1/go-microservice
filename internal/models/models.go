@@ -32,6 +32,7 @@ func FromGeomPoint(gp *geom.Point) Point {
 type SearchRequest struct {
 	NAFCode string `json:"nafCode"`
 	Type    string `json:"type"`
+	// For FeatureCollection format
 	Features []struct {
 		Type       string `json:"type"`
 		Properties struct{} `json:"properties"`
@@ -40,6 +41,11 @@ type SearchRequest struct {
 			Coordinates [][][]float64 `json:"coordinates"`
 		} `json:"geometry"`
 	} `json:"features"`
+	// For Feature format
+	Geometry struct {
+		Type        string        `json:"type"`
+		Coordinates [][][]float64 `json:"coordinates"`
+	} `json:"geometry"`
 }
 
 // Business represents a business entity
@@ -279,6 +285,7 @@ type IrisResponse struct {
 // IrisRequest represents the request for the IRIS data endpoint
 type IrisRequest struct {
 	Type    string `json:"type"`
+	// For FeatureCollection format
 	Features []struct {
 		Type       string `json:"type"`
 		Properties struct{} `json:"properties"`
@@ -287,4 +294,9 @@ type IrisRequest struct {
 			Coordinates [][][]float64 `json:"coordinates"`
 		} `json:"geometry"`
 	} `json:"features"`
+	// For Feature format
+	Geometry struct {
+		Type        string        `json:"type"`
+		Coordinates [][][]float64 `json:"coordinates"`
+	} `json:"geometry"`
 } 
