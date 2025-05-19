@@ -412,9 +412,6 @@ func calculateIntersectionPercentage(requestPoly, irisPoly *geom2.Geometry) floa
 	if intersectionArea == 0 {
 		return 0
 	}
-	if intersectionArea == 0 {
-		return 0
-	}
 
 	// Calculate percentage based on the IRIS polygon's area
 	irisArea := irisPoly.Area()
@@ -426,6 +423,9 @@ func calculateIntersectionPercentage(requestPoly, irisPoly *geom2.Geometry) floa
 
 	if percentage < 5 {
 		return 0
+	}
+	if percentage > 100 {
+		return 100
 	}
 
 	return percentage
@@ -629,9 +629,8 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 
 			// Calculate intersection percentage
 			inclusionPercentage := calculateIntersectionPercentage(&polygon, iris.Polygon)
-			if inclusionPercentage > 0 {
-				results <- result{iris: iris, percentage: inclusionPercentage}
-			}
+			// inclusionPercentage is always > 0 and < 100
+			results <- result{iris: iris, percentage: inclusionPercentage}
 		}(iris)
 	}
 
@@ -683,11 +682,17 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 			if !slices.Contains(response.Administrative.Communes, *communeValue) {
 				communeValue.Percentage = communeInclusionPercentage
 				response.Administrative.Communes = append(response.Administrative.Communes, *communeValue)
-				// add postal code data
-				response.Administrative.PostalCodes = append(response.Administrative.PostalCodes, models.PostalCodeData{
-					PostalCode: communeValue.PostalCode,
-					Percentage: communeInclusionPercentage,
-				})
+				// Split postal codes by comma and add separate entries for each
+				for postalCode := range strings.SplitSeq(communeValue.PostalCode, ",") {
+					// Trim whitespace from postal code
+					postalCode = strings.TrimSpace(postalCode)
+					if postalCode != "" {
+						response.Administrative.PostalCodes = append(response.Administrative.PostalCodes, models.PostalCodeData{
+							PostalCode: postalCode,
+							Percentage: communeInclusionPercentage,
+						})
+					}
+				}
 			}
 		}
 	}
