@@ -11,11 +11,17 @@ import (
 	"csv-processor/internal/services"
 )
 
+const (
+	AppVersion = "1.0.0"
+)
+
 func main() {
+	log.Printf("Starting CSV Processor v%s", AppVersion)
+	
 	// Get the absolute path to the CSV files
 	businessCSVPath := config.GetDataFilePath("StockEtablissement_open_only_and_geo_and_names.csv")
 	irisCSVPath := config.GetDataFilePath("iris-data-with-polygon-coord-standard-with-area-and-calculations.csv")
-	communeCSVPath := config.GetDataFilePath("commune_from_iris_completed_mysql_polygons-04092024.csv")
+	communeCSVPath := config.GetDataFilePath("full_commune_from_iris-05092024.csv")
 	qpCSVPath := config.GetDataFilePath("final_special_zones-06092024.csv")
 
 	businessAbsPath, err := filepath.Abs(businessCSVPath)

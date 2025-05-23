@@ -421,7 +421,7 @@ func calculateIntersectionPercentage(requestPoly, irisPoly *geom2.Geometry) floa
 	
 	percentage := (intersectionArea / irisArea) * 100
 
-	if percentage < 5 {
+	if percentage < 1 {
 		return 0
 	}
 	if percentage > 100 {
@@ -437,7 +437,7 @@ func aggregateIrisData(response *models.IrisResponse, iris *models.IrisData, inc
 
 	// Aggregate raw data
 	for k, v := range iris.RawData {
-		response.Data[k] += v * factor
+		response.Data.OtherData[k] += v * factor
 	}
 
 	// Update total area and population
@@ -568,10 +568,11 @@ func (s *CSVService) loadCommuneData(communeCodes map[string]bool) (map[string]*
 			ID: strconv.Itoa(lineNumber),
 			CommuneCode: communeCode,
 			Population: parseFloat(record[1]),
-			CommuneName: record[len(record)-5],
-			PostalCode:  record[len(record)-6],
-			SurfaceArea: parseFloat(record[len(record)-4]),
-			Polygon: s.parsePolygon(record[len(record)-10]),
+			CommuneName: record[len(record)-6],
+			PostalCode:  record[len(record)-7],
+			SurfaceArea: parseFloat(record[len(record)-5]),
+			Polygon: s.parsePolygon(record[len(record)-11]),
+			AverageIncome: parseFloat(record[len(record)-1]),
 		}
 		lineNumber++
 	}
@@ -599,7 +600,14 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 
 	// Initialize response with IRIS data
 	response := &models.IrisResponse{
-		Data: make(map[string]float64),
+		Data: models.Statistics{
+			MedianIncome: models.MedianIncome{
+				AverageIncome:        0,
+				IsFullyCovered:      false,
+				PercentageAreaCovered: 0,
+			},
+			OtherData: make(map[string]float64),
+		},
 		Administrative: models.AdministrativeData{
 			Communes:     make([]models.CommuneData, 0),
 			PostalCodes:  make([]models.PostalCodeData, 0),
@@ -671,6 +679,12 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 		return nil, fmt.Errorf("error loading commune data: %v", err)
 	}
 
+	totalIncome := 0.0
+	totalPopulationWithIncomeData := 0.0
+	totalArea := 0.0
+	totalAreaWithIncomeData := 0.0
+	allAreasHaveIncomeData := true
+
 	// Process communes that had intersecting IRIS zones
 	for communeCode := range intersectingCommunes {
 		if communeValue, exists := communeData[communeCode]; exists {
@@ -694,8 +708,34 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 					}
 				}
 			}
+
+			// Calculate average income
+			area := communeValue.SurfaceArea
+			totalArea += area
+			if (communeValue.AverageIncome > 0 && communeValue.Population > 0 ) {
+				totalIncome += communeValue.AverageIncome * communeValue.Population
+				totalPopulationWithIncomeData += communeValue.Population
+				totalAreaWithIncomeData += area
+			} else {
+				allAreasHaveIncomeData = false
+			}
 		}
 	}
+
+	averageIncome := 0.0
+	if (totalPopulationWithIncomeData > 0) {
+		averageIncome = totalIncome / totalPopulationWithIncomeData
+	}
+
+	percentageAreaCovered := 0.0
+	if (totalAreaWithIncomeData > 0 && totalArea > 0) {
+		percentageAreaCovered = totalAreaWithIncomeData / totalArea
+	}
+
+	// add income data to the response
+	response.Data.MedianIncome.AverageIncome = averageIncome
+	response.Data.MedianIncome.IsFullyCovered = allAreasHaveIncomeData
+	response.Data.MedianIncome.PercentageAreaCovered = percentageAreaCovered
 
 	// Load and process QP data
 	qpData, err := s.loadQPData()

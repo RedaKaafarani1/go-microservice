@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -224,13 +225,14 @@ type QPData struct {
 // CommuneData represents data from the commune CSV file
 type CommuneData struct {
 	ID           string  `json:"id"`
-	CommuneCode  string  `json:"commune_code"`
-	CommuneName  string  `json:"commune_name"`
+	CommuneCode  string  `json:"code_insee"`
+	CommuneName  string  `json:"name"`
 	PostalCode   string  `json:"postal_code"`
 	Percentage   float64 `json:"percentage"`
 	Population   float64 `json:"-"`
 	SurfaceArea  float64 `json:"-"`
 	Polygon *geom2.Geometry `json:"-"`
+	AverageIncome float64 `json:"-"`
 }
 
 type PostalCodeData struct {
@@ -274,10 +276,39 @@ type CriminalityResponse struct {
 	RobberiesWithoutViolenceAgainstPersons *CriminalityData `json:"robberies_without_violence_against_persons"`
 }
 
+// MedianIncome represents median income statistics
+type MedianIncome struct {
+	AverageIncome        float64 `json:"average_income"`
+	IsFullyCovered      bool    `json:"is_fully_covered"`
+	PercentageAreaCovered float64 `json:"percentage_area_covered"`
+}
+
+// Statistics represents the statistics data that can contain nested objects
+type Statistics struct {
+	MedianIncome MedianIncome            `json:"median_income"`
+	OtherData    map[string]float64      `json:"-"`
+}
+
+// MarshalJSON implements custom JSON marshaling for Statistics
+func (s Statistics) MarshalJSON() ([]byte, error) {
+	// Create a map that will hold all statistics
+	stats := make(map[string]interface{})
+	
+	// Add median income
+	stats["median_income"] = s.MedianIncome
+	
+	// Add all other statistics, rounding to integers
+	for k, v := range s.OtherData {
+		stats[k] = int(math.Round(v))
+	}
+	
+	return json.Marshal(stats)
+}
+
 // IrisResponse represents the response for the IRIS data endpoint
 type IrisResponse struct {
 	TotalPopulation float64            `json:"totalPopulation"`
-	Data           map[string]float64 `json:"statistics"`
+	Data           Statistics         `json:"statistics"`
 	Criminality    CriminalityResponse `json:"criminality"`
 	Administrative AdministrativeData `json:"administrative"`
 }
