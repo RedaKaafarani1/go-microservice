@@ -655,11 +655,13 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 
 	// Process results
 	for result := range results {
-		intersectingZones++
-		// Aggregate data with inclusion percentage
-		aggregateIrisData(response, result.iris, result.percentage)
-		// Track this commune for later processing
-		intersectingCommunes[result.iris.COM] = true
+		if result.percentage > 0 {  // Only count zones that actually intersect
+			intersectingZones++
+			// Aggregate data with inclusion percentage
+			aggregateIrisData(response, result.iris, result.percentage)
+			// Track this commune for later processing
+			intersectingCommunes[result.iris.COM] = true
+		}
 	}
 
 	// Check for errors
