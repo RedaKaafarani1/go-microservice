@@ -5,7 +5,7 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"os"
+	// "os"
 	"time"
 
 	"csv-processor/internal/models"
@@ -193,9 +193,9 @@ func simplifyGeoJSONPolygon(coordinates [][][]float64) [][][]float64 {
 	// Log simplification results
 	log.Printf("Polygon simplified from %d to %d points (epsilon: %f)", len(points), len(simplifiedPoints), epsilon)
 
-	// output the geojson to a file
-	geojsonStr, _ := json.Marshal(simplifiedCoords)
-	os.WriteFile("simplified_geojson.json", geojsonStr, 0644)
+	// // output the geojson to a file
+	// geojsonStr, _ := json.Marshal(simplifiedCoords)
+	// os.WriteFile("simplified_geojson.json", geojsonStr, 0644)
 
 	return simplifiedCoords
 }
