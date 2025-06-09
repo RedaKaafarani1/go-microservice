@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -688,6 +689,13 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 	allAreasHaveIncomeData := true
 
 	// Process communes that had intersecting IRIS zones
+	// Create maps to track postal code data
+	type postalCodeStats struct {
+		totalWeightedPercentage float64
+		totalArea              float64
+	}
+	postalCodeStatsMap := make(map[string]*postalCodeStats)
+
 	for communeCode := range intersectingCommunes {
 		if communeValue, exists := communeData[communeCode]; exists {
 			communeInclusionPercentage := calculateIntersectionPercentage(&polygon, communeValue.Polygon)
@@ -696,17 +704,20 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 			}
 			// append only if it's not already in the array
 			if !slices.Contains(response.Administrative.Communes, *communeValue) {
-				communeValue.Percentage = communeInclusionPercentage
+				communeValue.Percentage = math.Round(communeInclusionPercentage)
 				response.Administrative.Communes = append(response.Administrative.Communes, *communeValue)
-				// Split postal codes by comma and add separate entries for each
+				// Split postal codes by comma and calculate weighted average for each
 				for postalCode := range strings.SplitSeq(communeValue.PostalCode, ",") {
 					// Trim whitespace from postal code
 					postalCode = strings.TrimSpace(postalCode)
 					if postalCode != "" {
-						response.Administrative.PostalCodes = append(response.Administrative.PostalCodes, models.PostalCodeData{
-							PostalCode: postalCode,
-							Percentage: communeInclusionPercentage,
-						})
+						// Initialize postal code data if it doesn't exist
+						if _, exists := postalCodeStatsMap[postalCode]; !exists {
+							postalCodeStatsMap[postalCode] = &postalCodeStats{}
+						}
+						// Add weighted percentage and area
+						postalCodeStatsMap[postalCode].totalWeightedPercentage += communeInclusionPercentage * communeValue.SurfaceArea
+						postalCodeStatsMap[postalCode].totalArea += communeValue.SurfaceArea
 					}
 				}
 			}
@@ -722,6 +733,24 @@ func (s *CSVService) GetIrisData(geojsonStr string) (*models.IrisResponse, error
 				allAreasHaveIncomeData = false
 			}
 		}
+	}
+
+	// Convert postal code data to array with weighted average percentages
+	for postalCode, stats := range postalCodeStatsMap {
+		// Calculate weighted average percentage
+		weightedAverage := 0.0
+		if stats.totalArea > 0 {
+			weightedAverage = stats.totalWeightedPercentage / stats.totalArea
+			if weightedAverage > 100 {
+				weightedAverage = 100
+			}
+			// round weightedAverage to nearest integer
+			weightedAverage = math.Round(weightedAverage)
+		}
+		response.Administrative.PostalCodes = append(response.Administrative.PostalCodes, models.PostalCodeData{
+			PostalCode: postalCode,
+			Percentage: weightedAverage,
+		})
 	}
 
 	averageIncome := 0.0
