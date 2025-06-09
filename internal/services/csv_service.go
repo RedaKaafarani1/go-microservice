@@ -29,11 +29,12 @@ type CSVService struct {
 	irisFilePath    string
 	qpFilePath      string
 	communeFilePath string
+	incomeFilePath string
 	criminalityService *CriminalityService
 }
 
 // NewCSVService creates a new CSVService instance
-func NewCSVService(businessFilePath, irisFilePath, qpFilePath, communeFilePath string) *CSVService {
+func NewCSVService(businessFilePath, irisFilePath, qpFilePath, communeFilePath, incomeFilePath string) *CSVService {
 	criminalityService, err := NewCriminalityService()
 	if err != nil {
 		log.Printf("Warning: failed to initialize criminality service: %v", err)
@@ -44,6 +45,7 @@ func NewCSVService(businessFilePath, irisFilePath, qpFilePath, communeFilePath s
 		irisFilePath:    irisFilePath,
 		qpFilePath:      qpFilePath,
 		communeFilePath: communeFilePath,
+		incomeFilePath: incomeFilePath,
 		criminalityService: criminalityService,
 	}
 }
@@ -307,17 +309,20 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 
 		// Parse address more efficiently
 		addressParts := []string{
-			record[12],  // complementAdresseEtablissement
-			record[13],  // numeroVoieEtablissement
-			record[17],  // typeVoieEtablissement
-			record[18],  // libelleVoieEtablissement
-			record[19],  // codePostalEtablissement
-			record[20],  // libelleCommuneEtablissement
+			record[11],  // complementAdresseEtablissement
+			record[12],  // numeroVoieEtablissement
+			record[16],  // typeVoieEtablissement
+			record[17],  // libelleVoieEtablissement
+			record[18],  // codePostalEtablissement
+			record[19],  // libelleCommuneEtablissement
 		}
+
+		// log addressParts
+		log.Printf("addressParts: %v", addressParts)
 
 		for i, part := range addressParts {
 			if part != "" {
-				if i > 0 {
+				if i > 0 && addressParts[i-1] != "" {
 					address.WriteString(" ")
 				}
 				address.WriteString(part)
@@ -992,6 +997,14 @@ func (s *CSVService) parseIrisRecord(record []string) *models.IrisData {
 	iris.TotalPopulation = iris.RawData["population_total"]
 
 	return iris
+}
+
+func (s *CSVService) GetCompetitionData(communeCode string) (*models.CompetitionResponse, error) {
+	//todo
+	return &models.CompetitionResponse{
+		NumberOfCompetitors: 0,
+		CommuneCode: communeCode,
+	}, nil
 }
 
 // Helper function to parse float values

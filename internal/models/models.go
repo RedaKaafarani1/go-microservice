@@ -331,3 +331,17 @@ type IrisRequest struct {
 		Coordinates [][][]float64 `json:"coordinates"`
 	} `json:"geometry"`
 } 
+
+// competitor count response
+type CompetitorCountResponse struct {
+	NumberOfCompetitors int `json:"number_of_competitors"`
+}
+
+type CompetitionRequest struct {
+	CommuneCode string `json:"commune_code"`
+}
+
+type CompetitionResponse struct {
+	NumberOfCompetitors int `json:"number_of_competitors"`
+	CommuneCode string `json:"commune_code"`
+}
