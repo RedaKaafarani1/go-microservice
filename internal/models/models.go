@@ -52,6 +52,7 @@ type SearchRequest struct {
 // Business represents a business entity
 type Business struct {
 	Name      string  `json:"name"`
+	Siret     string  `json:"siret"`
 	NAFCode   string  `json:"nafCode"`
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
@@ -337,11 +338,24 @@ type CompetitorCountResponse struct {
 	NumberOfCompetitors int `json:"number_of_competitors"`
 }
 
-type CompetitionRequest struct {
-	CommuneCode string `json:"commune_code"`
-}
-
+// TODO: change these, add more fields in the response
 type CompetitionResponse struct {
-	NumberOfCompetitors int `json:"number_of_competitors"`
-	CommuneCode string `json:"commune_code"`
+	NumCompetitorsWithAStatus int `json:"num_competitors_with_0_to_32k_revenue"`
+	NumCompetitorsWithBStatus int `json:"num_competitors_with_32k_to_82k_revenue"`
+	NumCompetitorsWithCStatus int `json:"num_competitors_with_82k_to_250k_revenue"`
+	NumCompetitorsWithDStatus int `json:"num_competitors_with_250k_to_1m_revenue"`
+	NumCompetitorsWithEStatus int `json:"num_competitors_with_1m_plus_revenue"`
+	CompetitorsAverageRevenueLastYear float64 `json:"competitors_average_revenue_last_year"`
+	CompetitorsAverageEmployeesLastYear float64 `json:"competitors_average_employees_last_year"`
+	CompetitorsAverageRevenue2YearsAgo float64 `json:"competitors_average_revenue_2_years_ago"`
+	CompetitorsAverageEmployees2YearsAgo float64 `json:"competitors_average_employees_2_years_ago"`
+	CompetitorsAverageRevenue3YearsAgo float64 `json:"competitors_average_revenue_3_years_ago"`
+	CompetitorsAverageEmployees3YearsAgo float64 `json:"competitors_average_employees_3_years_ago"`
+	PercentageCompetitorsWithDeclaredRevenueLastYear float64 `json:"percentage_competitors_with_declared_revenue_last_year"`
+	PercentageCompetitorsWithDeclaredEmployeesLastYear float64 `json:"percentage_competitors_with_declared_employees_last_year"`
+	PercentageCompetitorsWithDeclaredRevenue2YearsAgo float64 `json:"percentage_competitors_with_declared_revenue_2_years_ago"`
+	PercentageCompetitorsWithDeclaredEmployees2YearsAgo float64 `json:"percentage_competitors_with_declared_employees_2_years_ago"`
+	PercentageCompetitorsWithDeclaredRevenue3YearsAgo float64 `json:"percentage_competitors_with_declared_revenue_3_years_ago"`
+	PercentageCompetitorsWithDeclaredEmployees3YearsAgo float64 `json:"percentage_competitors_with_declared_employees_3_years_ago"`
+	OldDataUsed bool `json:"old_data_used"`
 }

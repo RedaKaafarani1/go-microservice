@@ -34,7 +34,8 @@ func NewCriminalityService() (*CriminalityService, error) {
 }
 
 func (s *CriminalityService) loadCommuneCrimes() error {
-	file, err := os.Open(config.GetDataFilePath("crimes_per_commune.csv"))
+	csvConfig := config.GetCSVConfig()
+	file, err := os.Open(config.GetDataFilePath(csvConfig.CommuneCrimes))
 	if err != nil {
 		return err
 	}
@@ -94,7 +95,8 @@ func (s *CriminalityService) loadCommuneCrimes() error {
 }
 
 func (s *CriminalityService) loadDepartmentCrimes() error {
-	file, err := os.Open(config.GetDataFilePath("dep-indexed-crime-data.csv"))
+	csvConfig := config.GetCSVConfig()
+	file, err := os.Open(config.GetDataFilePath(csvConfig.DepartmentCrimes))
 	if err != nil {
 		return err
 	}

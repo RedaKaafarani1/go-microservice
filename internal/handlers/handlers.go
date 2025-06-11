@@ -262,7 +262,7 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 	// Search for businesses
 	geojsonStr, _ := json.Marshal(geometry)
-	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode)
+	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode, true)
 	if err != nil {
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
 		return
@@ -330,7 +330,7 @@ func (h *SearchHandler) HandleCompetitorCount(w http.ResponseWriter, r *http.Req
 
 	// Search for businesses
 	geojsonStr, _ := json.Marshal(geometry)
-	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode)
+	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode, false)
 	if err != nil {
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
 		return
@@ -351,6 +351,86 @@ func (h *SearchHandler) HandleCompetitorCount(w http.ResponseWriter, r *http.Req
 	duration := time.Since(startTime)
 	log.Printf("Request processed in %v\n", duration)
 }
+
+// HandleCompetitionData handles the competition data request
+func (h *SearchHandler) HandleCompetitionData(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req models.SearchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if req.NAFCode == "" {
+		http.Error(w, "NAF code is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get geometry based on request type
+	var geometry interface{}
+	if req.Type == "FeatureCollection" {
+		if len(req.Features) == 0 {
+			http.Error(w, "GeoJSON feature is required", http.StatusBadRequest)
+			return
+		}
+		if req.Features[0].Geometry.Type != "Polygon" {
+			http.Error(w, "Only Polygon geometry type is supported", http.StatusBadRequest)
+			return
+		}
+		// Simplify the polygon coordinates
+		req.Features[0].Geometry.Coordinates = simplifyGeoJSONPolygon(req.Features[0].Geometry.Coordinates) // Adjust epsilon as needed
+		geometry = req.Features[0].Geometry
+	} else if req.Type == "Feature" {
+		if req.Geometry.Type != "Polygon" {
+			http.Error(w, "Only Polygon geometry type is supported", http.StatusBadRequest)
+			return
+		}
+		// Simplify the polygon coordinates
+		req.Geometry.Coordinates = simplifyGeoJSONPolygon(req.Geometry.Coordinates) // Adjust epsilon as needed
+		geometry = req.Geometry
+	} else {
+		http.Error(w, "Invalid GeoJSON type. Must be either 'Feature' or 'FeatureCollection'", http.StatusBadRequest)
+		return
+	}
+
+	// Search for businesses
+	geojsonStr, _ := json.Marshal(geometry)
+	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode, false)
+	if err != nil {
+		http.Error(w, "Error processing request", http.StatusInternalServerError)
+		return
+	}
+
+	competitionData, err := h.csvService.GetCompetitionData(businesses)
+	if err != nil {
+		http.Error(w, "Error processing request", http.StatusInternalServerError)
+		return
+	}
+
+	// log json response
+	jsonResponse, _ := json.Marshal(competitionData)
+	log.Printf("competitionData: %s", string(jsonResponse))
+
+	// Return results
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(competitionData); err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
+
+	// Log processing time
+	duration := time.Since(startTime)
+	log.Printf("Request processed in %v\n", duration)
+}
+
+
 // IrisHandler handles IRIS data requests
 type IrisHandler struct {
 	csvService *services.CSVService
@@ -424,49 +504,3 @@ func (h *IrisHandler) HandleIrisData(w http.ResponseWriter, r *http.Request) {
 	duration := time.Since(startTime)
 	log.Printf("Request processed in %v\n", duration)
 } 
-
-// IncomeHandler handles income data requests
-type IncomeHandler struct {
-	csvService *services.CSVService
-}
-
-// NewIncomeHandler creates a new IncomeHandler instance
-func NewIncomeHandler(csvService *services.CSVService) *IncomeHandler {
-	return &IncomeHandler{
-		csvService: csvService,
-	}
-}
-
-// HandleCompetitionData handles the competition data request
-func (h *IncomeHandler) HandleCompetitionData(w http.ResponseWriter, r *http.Request) {
-	startTime := time.Now()
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req models.CompetitionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request format", http.StatusBadRequest)
-		return
-	}
-
-	// Get competition data
-	competitionData, err := h.csvService.GetCompetitionData(req.CommuneCode)
-	if err != nil {
-		http.Error(w, "Error processing request", http.StatusInternalServerError)
-		return
-	}
-
-	// Return results
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(competitionData); err != nil {
-		http.Error(w, "Error encoding response", http.StatusInternalServerError)
-		return
-	}
-
-	// Log processing time
-	duration := time.Since(startTime)
-	log.Printf("Request processed in %v\n", duration)
-}

@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"csv-processor/internal/config"
 	"csv-processor/internal/models"
 
 	"github.com/twpayne/go-geom"
@@ -31,22 +32,30 @@ type CSVService struct {
 	communeFilePath string
 	incomeFilePath string
 	criminalityService *CriminalityService
+	competitionService *CompetitionService
 }
 
 // NewCSVService creates a new CSVService instance
-func NewCSVService(businessFilePath, irisFilePath, qpFilePath, communeFilePath, incomeFilePath string) *CSVService {
+func NewCSVService() *CSVService {
+	csvConfig := config.GetCSVConfig()
+	
 	criminalityService, err := NewCriminalityService()
 	if err != nil {
 		log.Printf("Warning: failed to initialize criminality service: %v", err)
 	}
 	
+	competitionService, err := NewCompetitionService()
+	if err != nil {
+		log.Printf("Warning: failed to initialize competition service: %v", err)
+	}
+
 	return &CSVService{
-		businessFilePath: businessFilePath,
-		irisFilePath:    irisFilePath,
-		qpFilePath:      qpFilePath,
-		communeFilePath: communeFilePath,
-		incomeFilePath: incomeFilePath,
+		businessFilePath: config.GetDataFilePath(csvConfig.BusinessData),
+		irisFilePath:    config.GetDataFilePath(csvConfig.IrisData),
+		qpFilePath:      config.GetDataFilePath(csvConfig.QPData),
+		communeFilePath: config.GetDataFilePath(csvConfig.CommuneData),
 		criminalityService: criminalityService,
+		competitionService: competitionService,
 	}
 }
 
@@ -214,7 +223,7 @@ func (s *CSVService) writeResultsToFile(businesses []*models.Business, nafCode s
 }
 
 // SearchBusinesses searches for businesses matching the given criteria
-func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string) ([]*models.Business, error) {
+func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string, write bool) ([]*models.Business, error) {
 	// Convert GeoJSON to geometry
 	geometry, err := s.convertGeoJSONToGeometry(geojsonStr)
 	if err != nil {
@@ -234,8 +243,10 @@ func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string) ([]*mod
 	results := spatialIndex.Query(geometry)
 
 	// Write results to file
-	if err := s.writeResultsToFile(results, nafCode); err != nil {
-		log.Printf("Warning: error writing results to file: %v", err)
+	if write {
+		if err := s.writeResultsToFile(results, nafCode); err != nil {
+			log.Printf("Warning: error writing results to file: %v", err)
+		}
 	}
 
 	return results, nil
@@ -294,6 +305,20 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 			continue
 		}
 
+		if len(businessName) < 9 {
+			businessName = "0" + businessName
+		}
+
+		// Parse siret
+		siret := record[2]
+		if siret == "" {
+			continue
+		}
+		
+		if len(siret) < 14 {
+			siret = "0" + siret
+		}
+
 		// Parse coordinates
 		longitude, err := strconv.ParseFloat(record[len(record)-2], 64)
 		if err != nil {
@@ -317,9 +342,6 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 			record[19],  // libelleCommuneEtablissement
 		}
 
-		// log addressParts
-		log.Printf("addressParts: %v", addressParts)
-
 		for i, part := range addressParts {
 			if part != "" {
 				if i > 0 && addressParts[i-1] != "" {
@@ -332,6 +354,7 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 		// Create business entry
 		business := &models.Business{
 			Name:      businessName,
+			Siret: siret,
 			NAFCode:   recordNAFCode,
 			Latitude:  latitude,
 			Longitude: longitude,
@@ -999,12 +1022,11 @@ func (s *CSVService) parseIrisRecord(record []string) *models.IrisData {
 	return iris
 }
 
-func (s *CSVService) GetCompetitionData(communeCode string) (*models.CompetitionResponse, error) {
-	//todo
-	return &models.CompetitionResponse{
-		NumberOfCompetitors: 0,
-		CommuneCode: communeCode,
-	}, nil
+func (s *CSVService) GetCompetitionData(businesses []*models.Business) (*models.CompetitionResponse, error) {
+	if err := s.competitionService.doLoadCompetitionData(businesses); err != nil {
+		return nil, err
+	}
+	return s.competitionService.GetCompetitionData(businesses)
 }
 
 // Helper function to parse float values
