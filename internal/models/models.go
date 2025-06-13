@@ -31,7 +31,7 @@ func FromGeomPoint(gp *geom.Point) Point {
 
 // SearchRequest represents the search criteria
 type SearchRequest struct {
-	NAFCode string `json:"nafCode"`
+	NAFCodes []string `json:"nafCodes"`
 	Type    string `json:"type"`
 	// For FeatureCollection format
 	Features []struct {
@@ -338,24 +338,75 @@ type CompetitorCountResponse struct {
 	NumberOfCompetitors int `json:"number_of_competitors"`
 }
 
-// TODO: change these, add more fields in the response
+// CompetitionResponse represents the competition data response
 type CompetitionResponse struct {
 	NumCompetitorsWithAStatus int `json:"num_competitors_with_0_to_32k_revenue"`
 	NumCompetitorsWithBStatus int `json:"num_competitors_with_32k_to_82k_revenue"`
 	NumCompetitorsWithCStatus int `json:"num_competitors_with_82k_to_250k_revenue"`
 	NumCompetitorsWithDStatus int `json:"num_competitors_with_250k_to_1m_revenue"`
 	NumCompetitorsWithEStatus int `json:"num_competitors_with_1m_plus_revenue"`
-	CompetitorsAverageRevenueLastYear float64 `json:"competitors_average_revenue_last_year"`
-	CompetitorsAverageEmployeesLastYear float64 `json:"competitors_average_employees_last_year"`
-	CompetitorsAverageRevenue2YearsAgo float64 `json:"competitors_average_revenue_2_years_ago"`
-	CompetitorsAverageEmployees2YearsAgo float64 `json:"competitors_average_employees_2_years_ago"`
-	CompetitorsAverageRevenue3YearsAgo float64 `json:"competitors_average_revenue_3_years_ago"`
-	CompetitorsAverageEmployees3YearsAgo float64 `json:"competitors_average_employees_3_years_ago"`
-	PercentageCompetitorsWithDeclaredRevenueLastYear float64 `json:"percentage_competitors_with_declared_revenue_last_year"`
+	CompetitorsAverageCALastYear float64 `json:"competitors_average_revenue_last_year"`
+	CompetitorsAverageCA2YearsAgo float64 `json:"competitors_average_revenue_2_years_ago"`
+	CompetitorsAverageCA3YearsAgo float64 `json:"competitors_average_revenue_3_years_ago"`
+	CompetitorsAverageRevenueLastYear float64 `json:"competitors_average_profits_last_year"`
+	CompetitorsAverageEmployeesLastYear int `json:"competitors_average_employees_last_year"`
+	CompetitorsAverageRevenue2YearsAgo float64 `json:"competitors_average_profits_2_years_ago"`
+	CompetitorsAverageEmployees2YearsAgo int `json:"competitors_average_employees_2_years_ago"`
+	CompetitorsAverageRevenue3YearsAgo float64 `json:"competitors_average_profits_3_years_ago"`
+	CompetitorsAverageEmployees3YearsAgo int `json:"competitors_average_employees_3_years_ago"`
+	PercentageCompetitorsWithDeclaredCALastYear float64 `json:"percentage_competitors_with_declared_revenue_last_year"`
+	PercentageCompetitorsWithDeclaredCA2YearsAgo float64 `json:"percentage_competitors_with_declared_revenue_2_years_ago"`
+	PercentageCompetitorsWithDeclaredCA3YearsAgo float64 `json:"percentage_competitors_with_declared_revenue_3_years_ago"`
+	PercentageCompetitorsWithDeclaredRevenueLastYear float64 `json:"percentage_competitors_with_declared_profits_last_year"`
 	PercentageCompetitorsWithDeclaredEmployeesLastYear float64 `json:"percentage_competitors_with_declared_employees_last_year"`
-	PercentageCompetitorsWithDeclaredRevenue2YearsAgo float64 `json:"percentage_competitors_with_declared_revenue_2_years_ago"`
+	PercentageCompetitorsWithDeclaredRevenue2YearsAgo float64 `json:"percentage_competitors_with_declared_profits_2_years_ago"`
 	PercentageCompetitorsWithDeclaredEmployees2YearsAgo float64 `json:"percentage_competitors_with_declared_employees_2_years_ago"`
-	PercentageCompetitorsWithDeclaredRevenue3YearsAgo float64 `json:"percentage_competitors_with_declared_revenue_3_years_ago"`
+	PercentageCompetitorsWithDeclaredRevenue3YearsAgo float64 `json:"percentage_competitors_with_declared_profits_3_years_ago"`
 	PercentageCompetitorsWithDeclaredEmployees3YearsAgo float64 `json:"percentage_competitors_with_declared_employees_3_years_ago"`
+	CAArrayLastYear []float64 `json:"revenue_array_last_year"`
+	CAArray2YearsAgo []float64 `json:"revenue_array_2_years_ago"`
+	CAArray3YearsAgo []float64 `json:"revenue_array_3_years_ago"`
+	RevenueArrayLastYear []float64 `json:"profits_array_last_year"`
+	RevenueArray2YearsAgo []float64 `json:"profits_array_2_years_ago"`
+	RevenueArray3YearsAgo []float64 `json:"profits_array_3_years_ago"`
+	EmployeesArrayLastYear []float64 `json:"employees_array_last_year"`
+	EmployeesArray2YearsAgo []float64 `json:"employees_array_2_years_ago"`
+	EmployeesArray3YearsAgo []float64 `json:"employees_array_3_years_ago"`
+	NumCompetitorsWithConsistentIncrease float64 `json:"num_competitors_with_consistent_revenue_increase"`
+	NumCompetitorsWithConsistentDecrease float64 `json:"num_competitors_with_consistent_revenue_decrease"`
+	NumCompetitorsWithMixedTrend float64 `json:"num_competitors_with_mixed_revenue_trend"`
 	OldDataUsed bool `json:"old_data_used"`
+}
+
+// NAFCodeResponse represents the response for a specific NAF code
+type NAFCodeResponse struct {
+	NAFCode           string     `json:"naf_code"`
+	NumberOfBusinesses int       `json:"number_of_businesses"`
+	Businesses        []*Business `json:"businesses"`
+}
+
+// SearchResponse represents the response for the search endpoint
+type SearchResponse struct {
+	NAFCodes []NAFCodeResponse `json:"naf_codes"`
+}
+
+// CompetitorWithData represents a competitor with its basic info and competition data
+type CompetitorsData struct {
+	Name      string  `json:"name"`
+	Siret     string  `json:"siret"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
+// NAFCodeCompetitionResponse represents the competition data for a specific NAF code
+type NAFCodeCompetitionResponse struct {
+	NAFCode           string     `json:"naf_code"`
+	NumberOfCompetitors int       `json:"number_of_competitors"`
+	Competitors       []CompetitorsData `json:"competitors"`
+	CompetitionStats  CompetitionResponse  `json:"competition_stats"`
+}
+
+// CompetitionResponseByNAF represents the response for the competition data endpoint grouped by NAF code
+type CompetitionResponseByNAF struct {
+	NAFCodes []NAFCodeCompetitionResponse `json:"naf_codes"`
 }

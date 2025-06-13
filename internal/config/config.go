@@ -55,4 +55,4 @@ func GetDataFilePath(filename string) string {
 // GetCSVConfig returns the CSV configuration
 func GetCSVConfig() CSVConfig {
 	return csvConfig
-} 
+}

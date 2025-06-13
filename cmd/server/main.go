@@ -33,11 +33,15 @@ func main() {
 	if _, err := os.Stat(config.GetDataFilePath(csvConfig.CommuneData)); os.IsNotExist(err) {
 		log.Fatalf("Commune CSV file not found at: %s", config.GetDataFilePath(csvConfig.CommuneData))
 	}
+	if _, err := os.Stat(config.GetDataFilePath(csvConfig.CompetitionData)); os.IsNotExist(err) {
+		log.Fatalf("Competition CSV file not found at: %s", config.GetDataFilePath(csvConfig.CompetitionData))
+	}
 
 	log.Printf("Using business CSV file at: %s", config.GetDataFilePath(csvConfig.BusinessData))
 	log.Printf("Using IRIS CSV file at: %s", config.GetDataFilePath(csvConfig.IrisData))
 	log.Printf("Using QP CSV file at: %s", config.GetDataFilePath(csvConfig.QPData))
 	log.Printf("Using commune CSV file at: %s", config.GetDataFilePath(csvConfig.CommuneData))
+	log.Printf("Using competition CSV file at: %s", config.GetDataFilePath(csvConfig.CompetitionData))
 
 	// Initialize services and handlers
 	csvService := services.NewCSVService()

@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+
 	// "os"
 	"time"
 
@@ -228,8 +229,8 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate request
-	if req.NAFCode == "" {
-		http.Error(w, "NAF code is required", http.StatusBadRequest)
+	if len(req.NAFCodes) == 0 {
+		http.Error(w, "At least one NAF code is required", http.StatusBadRequest)
 		return
 	}
 
@@ -245,7 +246,7 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Simplify the polygon coordinates
-		req.Features[0].Geometry.Coordinates = simplifyGeoJSONPolygon(req.Features[0].Geometry.Coordinates) // Adjust epsilon as needed
+		req.Features[0].Geometry.Coordinates = simplifyGeoJSONPolygon(req.Features[0].Geometry.Coordinates)
 		geometry = req.Features[0].Geometry
 	} else if req.Type == "Feature" {
 		if req.Geometry.Type != "Polygon" {
@@ -253,7 +254,7 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Simplify the polygon coordinates
-		req.Geometry.Coordinates = simplifyGeoJSONPolygon(req.Geometry.Coordinates) // Adjust epsilon as needed
+		req.Geometry.Coordinates = simplifyGeoJSONPolygon(req.Geometry.Coordinates)
 		geometry = req.Geometry
 	} else {
 		http.Error(w, "Invalid GeoJSON type. Must be either 'Feature' or 'FeatureCollection'", http.StatusBadRequest)
@@ -262,15 +263,35 @@ func (h *SearchHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 	// Search for businesses
 	geojsonStr, _ := json.Marshal(geometry)
-	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode, true)
+	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCodes, true)
 	if err != nil {
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
 		return
 	}
 
+	// Group businesses by NAF code
+	businessesByNAF := make(map[string][]*models.Business)
+	for _, business := range businesses {
+		businessesByNAF[business.NAFCode] = append(businessesByNAF[business.NAFCode], business)
+	}
+
+	// Create response with grouped businesses
+	nafResponses := make([]models.NAFCodeResponse, 0, len(businessesByNAF))
+	for nafCode, businesses := range businessesByNAF {
+		nafResponses = append(nafResponses, models.NAFCodeResponse{
+			NAFCode:           nafCode,
+			NumberOfBusinesses: len(businesses),
+			Businesses:        businesses,
+		})
+	}
+
+	response := models.SearchResponse{
+		NAFCodes: nafResponses,
+	}
+
 	// Return results
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(businesses); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		return
 	}
@@ -296,8 +317,8 @@ func (h *SearchHandler) HandleCompetitorCount(w http.ResponseWriter, r *http.Req
 	}
 
 	// Validate request
-	if req.NAFCode == "" {
-		http.Error(w, "NAF code is required", http.StatusBadRequest)
+	if len(req.NAFCodes) == 0 {
+		http.Error(w, "At least one NAF code is required", http.StatusBadRequest)
 		return
 	}
 
@@ -330,7 +351,7 @@ func (h *SearchHandler) HandleCompetitorCount(w http.ResponseWriter, r *http.Req
 
 	// Search for businesses
 	geojsonStr, _ := json.Marshal(geometry)
-	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode, false)
+	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCodes, false)
 	if err != nil {
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
 		return
@@ -368,8 +389,8 @@ func (h *SearchHandler) HandleCompetitionData(w http.ResponseWriter, r *http.Req
 	}
 
 	// Validate request
-	if req.NAFCode == "" {
-		http.Error(w, "NAF code is required", http.StatusBadRequest)
+	if len(req.NAFCodes) == 0 {
+		http.Error(w, "At least one NAF code is required", http.StatusBadRequest)
 		return
 	}
 
@@ -402,7 +423,7 @@ func (h *SearchHandler) HandleCompetitionData(w http.ResponseWriter, r *http.Req
 
 	// Search for businesses
 	geojsonStr, _ := json.Marshal(geometry)
-	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCode, false)
+	businesses, err := h.csvService.SearchBusinesses(string(geojsonStr), req.NAFCodes, true)
 	if err != nil {
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
 		return
@@ -413,10 +434,6 @@ func (h *SearchHandler) HandleCompetitionData(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
 		return
 	}
-
-	// log json response
-	jsonResponse, _ := json.Marshal(competitionData)
-	log.Printf("competitionData: %s", string(jsonResponse))
 
 	// Return results
 	w.Header().Set("Content-Type", "application/json")

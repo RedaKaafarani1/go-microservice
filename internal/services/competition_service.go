@@ -2,14 +2,17 @@ package services
 
 import (
 	"encoding/csv"
+	"math"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	// "log"
+
 	"csv-processor/internal/config"
 	"csv-processor/internal/models"
-	"golang.org/x/exp/slices"
+	// "golang.org/x/exp/slices"
 )
 
 // CompetitionHandler handles competition data requests
@@ -61,6 +64,12 @@ func (s *CompetitionService) loadCompetitionData(businesses []*models.Business) 
 		return err
 	}
 
+	//create a map of sirets
+	sirets := make(map[string]bool)
+	for _, business := range businesses {
+		sirets[business.Siret] = true
+	}
+
 	for {
 		record, err := reader.Read()
 		if err != nil {
@@ -76,12 +85,12 @@ func (s *CompetitionService) loadCompetitionData(businesses []*models.Business) 
 		siret := siren + nic
 
 		// check if siret is in businesses, loads only necessary data
-		if !slices.ContainsFunc(businesses, func(b *models.Business) bool {
-			return b.Siret == siret
-		}) {
+		if _, exists := sirets[siret]; !exists {
 			continue
 		}
-		
+
+		// remove siret from sirets to avoid duplicates
+		delete(sirets, siret)
 
 		if _, exists := s.competitionData[siret]; !exists {
 			s.competitionData[siret] = make(map[string]string)
@@ -193,158 +202,280 @@ func (s *CompetitionService) loadCompetitionData(businesses []*models.Business) 
 	return nil
 }
 	
-func (s *CompetitionService) GetCompetitionData(businesses []*models.Business) (*models.CompetitionResponse, error) {
-	response := models.CompetitionResponse{
-		NumCompetitorsWithAStatus: 0,
-		NumCompetitorsWithBStatus: 0,
-		NumCompetitorsWithCStatus: 0,
-		NumCompetitorsWithDStatus: 0,
-		NumCompetitorsWithEStatus: 0,
-		CompetitorsAverageRevenueLastYear: 0,
-		CompetitorsAverageEmployeesLastYear: 0,
-		CompetitorsAverageRevenue2YearsAgo: 0,
-		CompetitorsAverageEmployees2YearsAgo: 0,
-		CompetitorsAverageRevenue3YearsAgo: 0,
-		CompetitorsAverageEmployees3YearsAgo: 0,
-		PercentageCompetitorsWithDeclaredRevenueLastYear: 0,
-		PercentageCompetitorsWithDeclaredEmployeesLastYear: 0,
-		PercentageCompetitorsWithDeclaredRevenue2YearsAgo: 0,
-		PercentageCompetitorsWithDeclaredEmployees2YearsAgo: 0,
-		PercentageCompetitorsWithDeclaredRevenue3YearsAgo: 0,
-		PercentageCompetitorsWithDeclaredEmployees3YearsAgo: 0,
-		OldDataUsed: false,
+func (s *CompetitionService) GetCompetitionData(businesses []*models.Business) (*models.CompetitionResponseByNAF, error) {
+	// Group businesses by NAF code
+	businessesByNAF := make(map[string][]*models.Business)
+	for _, business := range businesses {
+		businessesByNAF[business.NAFCode] = append(businessesByNAF[business.NAFCode], business)
 	}
 
-	numCompetitorsWithDeclaredRevenueLastYear := 0
-	numCompetitorsWithDeclaredRevenue2YearsAgo := 0
-	numCompetitorsWithDeclaredRevenue3YearsAgo := 0
-	numCompetitorsWithDeclaredEmployeesLastYear := 0
-	numCompetitorsWithDeclaredEmployees2YearsAgo := 0
-	numCompetitorsWithDeclaredEmployees3YearsAgo := 0
-	numCompetitors := len(businesses)
-	
-	for _, business := range businesses {
-		siret := business.Siret
-		if _, exists := s.competitionData[siret]; !exists {
-			continue
-		}
-		currBusiness := s.competitionData[siret]
+	// Create response structure
+	response := &models.CompetitionResponseByNAF{
+		NAFCodes: make([]models.NAFCodeCompetitionResponse, 0, len(businessesByNAF)),
+	}
 
-		currKey := ""
-
-		if currBusiness["rangeCA1"] != "" {
-			currKey = "rangeCA1"
-		} else if currBusiness["rangeCA2"] != "" {
-			currKey = "rangeCA2"
-		} else if currBusiness["rangeCA3"] != "" {
-			currKey = "rangeCA3"
-		}
-
-		if currKey != "rangeCA1" {
-			response.OldDataUsed = true
+	// Process each NAF code group
+	for nafCode, nafBusinesses := range businessesByNAF {
+		// Create competitors list for this NAF code
+		competitors := make([]models.CompetitorsData, 0, len(nafBusinesses))
+		
+		// Process each business in this NAF code group
+		for _, business := range nafBusinesses {
+			siret := business.Siret
+			if _, exists := s.competitionData[siret]; !exists {
+				continue
+			}
+			currBusiness := s.competitionData[siret]
+			
+			competitor := models.CompetitorsData{
+				Name:      currBusiness["name"],
+				Siret:     siret,
+				Latitude:  parseFloat(currBusiness["latitude"]),
+				Longitude: parseFloat(currBusiness["longitude"]),
+			}
+			competitors = append(competitors, competitor)
 		}
 
-		if currKey != "" {
-			if currBusiness[currKey][0] == 'A' {
-				response.NumCompetitorsWithAStatus++
-			} else if currBusiness[currKey][0] == 'B' {
-				response.NumCompetitorsWithBStatus++
-			} else if currBusiness[currKey][0] == 'C' {
-				response.NumCompetitorsWithCStatus++
-			} else if currBusiness[currKey][0] == 'D' {
-				response.NumCompetitorsWithDStatus++
-			} else if currBusiness[currKey][0] == 'E' {
-				response.NumCompetitorsWithEStatus++
+		// Calculate competition stats for this NAF code group
+		stats := models.CompetitionResponse{
+			NumCompetitorsWithAStatus: 0,
+			NumCompetitorsWithBStatus: 0,
+			NumCompetitorsWithCStatus: 0,
+			NumCompetitorsWithDStatus: 0,
+			NumCompetitorsWithEStatus: 0,
+			CompetitorsAverageCALastYear: 0,
+			CompetitorsAverageCA2YearsAgo: 0,
+			CompetitorsAverageCA3YearsAgo: 0,
+			CompetitorsAverageRevenueLastYear: 0,
+			CompetitorsAverageEmployeesLastYear: 0,
+			CompetitorsAverageRevenue2YearsAgo: 0,
+			CompetitorsAverageEmployees2YearsAgo: 0,
+			CompetitorsAverageRevenue3YearsAgo: 0,
+			CompetitorsAverageEmployees3YearsAgo: 0,
+			PercentageCompetitorsWithDeclaredCALastYear: 0,
+			PercentageCompetitorsWithDeclaredCA2YearsAgo: 0,
+			PercentageCompetitorsWithDeclaredCA3YearsAgo: 0,
+			PercentageCompetitorsWithDeclaredRevenueLastYear: 0,
+			PercentageCompetitorsWithDeclaredEmployeesLastYear: 0,
+			PercentageCompetitorsWithDeclaredRevenue2YearsAgo: 0,
+			PercentageCompetitorsWithDeclaredEmployees2YearsAgo: 0,
+			PercentageCompetitorsWithDeclaredRevenue3YearsAgo: 0,
+			PercentageCompetitorsWithDeclaredEmployees3YearsAgo: 0,
+			RevenueArrayLastYear: []float64{},
+			RevenueArray2YearsAgo: []float64{},
+			RevenueArray3YearsAgo: []float64{},
+			EmployeesArrayLastYear: []float64{},
+			EmployeesArray2YearsAgo: []float64{},
+			EmployeesArray3YearsAgo: []float64{},
+			NumCompetitorsWithConsistentIncrease: 0,
+			NumCompetitorsWithConsistentDecrease: 0,
+			NumCompetitorsWithMixedTrend: 0,
+			OldDataUsed: false,
+		}
+
+		numCompetitorsWithDeclaredRevenueLastYear := 0
+		numCompetitorsWithDeclaredRevenue2YearsAgo := 0
+		numCompetitorsWithDeclaredRevenue3YearsAgo := 0
+		numCompetitorsWithDeclaredEmployeesLastYear := 0
+		numCompetitorsWithDeclaredEmployees2YearsAgo := 0
+		numCompetitorsWithDeclaredEmployees3YearsAgo := 0
+		numCompetitorsWithDeclaredCALastYear := 0
+		numCompetitorsWithDeclaredCA2YearsAgo := 0
+		numCompetitorsWithDeclaredCA3YearsAgo := 0
+		numCompetitors := len(nafBusinesses)
+
+		for _, business := range nafBusinesses {
+			siret := business.Siret
+			if _, exists := s.competitionData[siret]; !exists {
+				continue
+			}
+			currBusiness := s.competitionData[siret]
+
+			currKey := ""
+
+			if currBusiness["rangeCA1"] != "" {
+				currKey = "rangeCA1"
+			} else if currBusiness["rangeCA2"] != "" {
+				currKey = "rangeCA2"
+			} else if currBusiness["rangeCA3"] != "" {
+				currKey = "rangeCA3"
+			}
+
+			if currKey != "rangeCA1" {
+				stats.OldDataUsed = true
+			}
+
+			if currKey != "" {
+				if currBusiness[currKey][0] == 'A' {
+					stats.NumCompetitorsWithAStatus++
+				} else if currBusiness[currKey][0] == 'B' {
+					stats.NumCompetitorsWithBStatus++
+				} else if currBusiness[currKey][0] == 'C' {
+					stats.NumCompetitorsWithCStatus++
+				} else if currBusiness[currKey][0] == 'D' {
+					stats.NumCompetitorsWithDStatus++
+				} else if currBusiness[currKey][0] == 'E' {
+					stats.NumCompetitorsWithEStatus++
+				}
+			}
+
+			// Process CA data
+			ca1 := ""
+			ca2 := ""
+			ca3 := ""
+
+			if currBusiness["ca1"] != "" && currBusiness["ca1"] != "Confidentiel" {
+				ca1 = currBusiness["ca1"]
+			}
+			if currBusiness["ca2"] != "" && currBusiness["ca2"] != "Confidentiel" {
+				ca2 = currBusiness["ca2"]
+			}
+			if currBusiness["ca3"] != "" && currBusiness["ca3"] != "Confidentiel" {
+				ca3 = currBusiness["ca3"]
+			}
+
+			if ca1 != "" {
+				numCompetitorsWithDeclaredCALastYear++
+				stats.CAArrayLastYear = append(stats.CAArrayLastYear, parseFloat(ca1))
+				stats.CompetitorsAverageCALastYear += parseFloat(ca1)
+			}
+			if ca2 != "" {
+				numCompetitorsWithDeclaredCA2YearsAgo++
+				stats.CAArray2YearsAgo = append(stats.CAArray2YearsAgo, parseFloat(ca2))
+				stats.CompetitorsAverageCA2YearsAgo += parseFloat(ca2)
+			}
+			if ca3 != "" {
+				numCompetitorsWithDeclaredCA3YearsAgo++
+				stats.CAArray3YearsAgo = append(stats.CAArray3YearsAgo, parseFloat(ca3))
+				stats.CompetitorsAverageCA3YearsAgo += parseFloat(ca3)
+			}
+
+			// Check if CA values are consistent
+			if ca1 != "" && ca2 != "" && ca3 != "" {
+				if ca1 > ca2 && ca2 > ca3 {
+					stats.NumCompetitorsWithConsistentIncrease++
+				} else if ca1 < ca2 && ca2 < ca3 {
+					stats.NumCompetitorsWithConsistentDecrease++
+				} else {
+					stats.NumCompetitorsWithMixedTrend++
+				}
+			}
+
+			// Process revenue data
+			revenue1 := ""
+			revenue2 := ""
+			revenue3 := ""
+
+			if currBusiness["result1"] != "" && currBusiness["result1"] != "Confidentiel" {
+				revenue1 = currBusiness["result1"]
+			}
+			if currBusiness["result2"] != "" && currBusiness["result2"] != "Confidentiel" {
+				revenue2 = currBusiness["result2"]
+			}
+			if currBusiness["result3"] != "" && currBusiness["result3"] != "Confidentiel" {
+				revenue3 = currBusiness["result3"]
+			}
+
+			if revenue1 != "" {
+				numCompetitorsWithDeclaredRevenueLastYear++
+				stats.RevenueArrayLastYear = append(stats.RevenueArrayLastYear, parseFloat(revenue1))
+				stats.CompetitorsAverageRevenueLastYear += parseFloat(revenue1)
+			}
+			if revenue2 != "" {
+				numCompetitorsWithDeclaredRevenue2YearsAgo++
+				stats.RevenueArray2YearsAgo = append(stats.RevenueArray2YearsAgo, parseFloat(revenue2))
+				stats.CompetitorsAverageRevenue2YearsAgo += parseFloat(revenue2)
+			}
+			if revenue3 != "" {
+				numCompetitorsWithDeclaredRevenue3YearsAgo++
+				stats.RevenueArray3YearsAgo = append(stats.RevenueArray3YearsAgo, parseFloat(revenue3))
+				stats.CompetitorsAverageRevenue3YearsAgo += parseFloat(revenue3)
+			}
+
+			// Process employees data
+			employees1 := ""
+			employees2 := ""
+			employees3 := ""
+
+			if currBusiness["employees1"] != "" && currBusiness["employees1"] != "Confidentiel" {
+				stats.EmployeesArrayLastYear = append(stats.EmployeesArrayLastYear, parseFloat(currBusiness["employees1"]))
+				employees1 = currBusiness["employees1"]
+			}
+			if currBusiness["employees2"] != "" && currBusiness["employees2"] != "Confidentiel" {
+				stats.EmployeesArray2YearsAgo = append(stats.EmployeesArray2YearsAgo, parseFloat(currBusiness["employees2"]))
+				employees2 = currBusiness["employees2"]
+			}
+			if currBusiness["employees3"] != "" && currBusiness["employees3"] != "Confidentiel" {
+				stats.EmployeesArray3YearsAgo = append(stats.EmployeesArray3YearsAgo, parseFloat(currBusiness["employees3"]))
+				employees3 = currBusiness["employees3"]
+			}
+
+			if employees1 != "" {
+				numCompetitorsWithDeclaredEmployeesLastYear++
+				stats.CompetitorsAverageEmployeesLastYear += int(parseFloat(employees1))
+			}
+			if employees2 != "" {
+				numCompetitorsWithDeclaredEmployees2YearsAgo++
+				stats.CompetitorsAverageEmployees2YearsAgo += int(parseFloat(employees2))
+			}
+			if employees3 != "" {
+				numCompetitorsWithDeclaredEmployees3YearsAgo++
+				stats.CompetitorsAverageEmployees3YearsAgo += int(parseFloat(employees3))
 			}
 		}
-		
-		// Handle revenue data
-		revenue1 := ""
-		revenue2 := ""
-		revenue3 := ""
 
-		if currBusiness["result1"] != "" && currBusiness["result1"] != "Confidentiel" {
-			revenue1 = currBusiness["result1"]
-		}
-		if currBusiness["result2"] != "" && currBusiness["result2"] != "Confidentiel" {
-			revenue2 = currBusiness["result2"]
-		}
-		if currBusiness["result3"] != "" && currBusiness["result3"] != "Confidentiel" {
-			revenue3 = currBusiness["result3"]
+		// Calculate percentages and averages
+		if numCompetitors > 0 {
+			stats.PercentageCompetitorsWithDeclaredCALastYear = float64(numCompetitorsWithDeclaredCALastYear) / float64(numCompetitors) * 100
+			stats.PercentageCompetitorsWithDeclaredCA2YearsAgo = float64(numCompetitorsWithDeclaredCA2YearsAgo) / float64(numCompetitors) * 100
+			stats.PercentageCompetitorsWithDeclaredCA3YearsAgo = float64(numCompetitorsWithDeclaredCA3YearsAgo) / float64(numCompetitors) * 100
+			stats.PercentageCompetitorsWithDeclaredRevenueLastYear = float64(numCompetitorsWithDeclaredRevenueLastYear) / float64(numCompetitors) * 100
+			stats.PercentageCompetitorsWithDeclaredEmployeesLastYear = float64(numCompetitorsWithDeclaredEmployeesLastYear) / float64(numCompetitors) * 100
+			stats.PercentageCompetitorsWithDeclaredRevenue2YearsAgo = float64(numCompetitorsWithDeclaredRevenue2YearsAgo) / float64(numCompetitors) * 100
+			stats.PercentageCompetitorsWithDeclaredEmployees2YearsAgo = float64(numCompetitorsWithDeclaredEmployees2YearsAgo) / float64(numCompetitors) * 100
+			stats.PercentageCompetitorsWithDeclaredRevenue3YearsAgo = float64(numCompetitorsWithDeclaredRevenue3YearsAgo) / float64(numCompetitors) * 100
+			stats.PercentageCompetitorsWithDeclaredEmployees3YearsAgo = float64(numCompetitorsWithDeclaredEmployees3YearsAgo) / float64(numCompetitors) * 100
 		}
 
-		if revenue1 != "" {
-			numCompetitorsWithDeclaredRevenueLastYear++
-			response.CompetitorsAverageRevenueLastYear += parseFloat(revenue1)
+		if numCompetitorsWithDeclaredCALastYear > 0 {
+			stats.CompetitorsAverageCALastYear = math.Round(stats.CompetitorsAverageCALastYear / float64(numCompetitorsWithDeclaredCALastYear))
 		}
-		if revenue2 != "" {
-			numCompetitorsWithDeclaredRevenue2YearsAgo++
-			response.CompetitorsAverageRevenue2YearsAgo += parseFloat(revenue2)
+		if numCompetitorsWithDeclaredCA2YearsAgo > 0 {
+			stats.CompetitorsAverageCA2YearsAgo = math.Round(stats.CompetitorsAverageCA2YearsAgo / float64(numCompetitorsWithDeclaredCA2YearsAgo))
 		}
-		if revenue3 != "" {
-			numCompetitorsWithDeclaredRevenue3YearsAgo++
-			response.CompetitorsAverageRevenue3YearsAgo += parseFloat(revenue3)
+		if numCompetitorsWithDeclaredCA3YearsAgo > 0 {
+			stats.CompetitorsAverageCA3YearsAgo = math.Round(stats.CompetitorsAverageCA3YearsAgo / float64(numCompetitorsWithDeclaredCA3YearsAgo))
 		}
 
-		// Handle employees data
-		employees1 := ""
-		employees2 := ""
-		employees3 := ""
-
-		if currBusiness["employees1"] != "" && currBusiness["employees1"] != "Confidentiel" {
-			employees1 = currBusiness["employees1"]
+		if numCompetitorsWithDeclaredRevenueLastYear > 0 {
+			stats.CompetitorsAverageRevenueLastYear = math.Round(stats.CompetitorsAverageRevenueLastYear / float64(numCompetitorsWithDeclaredRevenueLastYear))
 		}
-		if currBusiness["employees2"] != "" && currBusiness["employees2"] != "Confidentiel" {
-			employees2 = currBusiness["employees2"]
+		if numCompetitorsWithDeclaredRevenue2YearsAgo > 0 {
+			stats.CompetitorsAverageRevenue2YearsAgo = math.Round(stats.CompetitorsAverageRevenue2YearsAgo / float64(numCompetitorsWithDeclaredRevenue2YearsAgo))
 		}
-		if currBusiness["employees3"] != "" && currBusiness["employees3"] != "Confidentiel" {
-			employees3 = currBusiness["employees3"]
+		if numCompetitorsWithDeclaredRevenue3YearsAgo > 0 {
+			stats.CompetitorsAverageRevenue3YearsAgo = math.Round(stats.CompetitorsAverageRevenue3YearsAgo / float64(numCompetitorsWithDeclaredRevenue3YearsAgo))
 		}
 
-		if employees1 != "" {
-			numCompetitorsWithDeclaredEmployeesLastYear++
-			response.CompetitorsAverageEmployeesLastYear += parseFloat(employees1)
+		if numCompetitorsWithDeclaredEmployeesLastYear > 0 {
+			stats.CompetitorsAverageEmployeesLastYear = int(math.Round(float64(stats.CompetitorsAverageEmployeesLastYear) / float64(numCompetitorsWithDeclaredEmployeesLastYear)))
 		}
-		if employees2 != "" {
-			numCompetitorsWithDeclaredEmployees2YearsAgo++
-			response.CompetitorsAverageEmployees2YearsAgo += parseFloat(employees2)
+		if numCompetitorsWithDeclaredEmployees2YearsAgo > 0 {
+			stats.CompetitorsAverageEmployees2YearsAgo = int(math.Round(float64(stats.CompetitorsAverageEmployees2YearsAgo) / float64(numCompetitorsWithDeclaredEmployees2YearsAgo)))
 		}
-		if employees3 != "" {
-			numCompetitorsWithDeclaredEmployees3YearsAgo++
-			response.CompetitorsAverageEmployees3YearsAgo += parseFloat(employees3)
+		if numCompetitorsWithDeclaredEmployees3YearsAgo > 0 {
+			stats.CompetitorsAverageEmployees3YearsAgo = int(math.Round(float64(stats.CompetitorsAverageEmployees3YearsAgo) / float64(numCompetitorsWithDeclaredEmployees3YearsAgo)))
 		}
+
+		// Add this NAF code's data to the response
+		response.NAFCodes = append(response.NAFCodes, models.NAFCodeCompetitionResponse{
+			NAFCode:           nafCode,
+			NumberOfCompetitors: len(competitors),
+			Competitors:       competitors,
+			CompetitionStats:  stats,
+		})
 	}
 
-	// Calculate percentages and averages after the loop
-	if numCompetitors > 0 {
-		response.PercentageCompetitorsWithDeclaredRevenueLastYear = float64(numCompetitorsWithDeclaredRevenueLastYear) / float64(numCompetitors) * 100
-		response.PercentageCompetitorsWithDeclaredEmployeesLastYear = float64(numCompetitorsWithDeclaredEmployeesLastYear) / float64(numCompetitors) * 100
-		response.PercentageCompetitorsWithDeclaredRevenue2YearsAgo = float64(numCompetitorsWithDeclaredRevenue2YearsAgo) / float64(numCompetitors) * 100
-		response.PercentageCompetitorsWithDeclaredEmployees2YearsAgo = float64(numCompetitorsWithDeclaredEmployees2YearsAgo) / float64(numCompetitors) * 100
-		response.PercentageCompetitorsWithDeclaredRevenue3YearsAgo = float64(numCompetitorsWithDeclaredRevenue3YearsAgo) / float64(numCompetitors) * 100
-		response.PercentageCompetitorsWithDeclaredEmployees3YearsAgo = float64(numCompetitorsWithDeclaredEmployees3YearsAgo) / float64(numCompetitors) * 100
-	}
-	
-	if numCompetitorsWithDeclaredRevenueLastYear > 0 {
-		response.CompetitorsAverageRevenueLastYear = response.CompetitorsAverageRevenueLastYear / float64(numCompetitorsWithDeclaredRevenueLastYear)
-	}
-	if numCompetitorsWithDeclaredRevenue2YearsAgo > 0 {
-		response.CompetitorsAverageRevenue2YearsAgo = response.CompetitorsAverageRevenue2YearsAgo / float64(numCompetitorsWithDeclaredRevenue2YearsAgo)
-	}
-	if numCompetitorsWithDeclaredRevenue3YearsAgo > 0 {
-		response.CompetitorsAverageRevenue3YearsAgo = response.CompetitorsAverageRevenue3YearsAgo / float64(numCompetitorsWithDeclaredRevenue3YearsAgo)
-	}
-
-	if numCompetitorsWithDeclaredEmployeesLastYear > 0 {
-		response.CompetitorsAverageEmployeesLastYear = response.CompetitorsAverageEmployeesLastYear / float64(numCompetitorsWithDeclaredEmployeesLastYear)
-	}
-	if numCompetitorsWithDeclaredEmployees2YearsAgo > 0 {
-		response.CompetitorsAverageEmployees2YearsAgo = response.CompetitorsAverageEmployees2YearsAgo / float64(numCompetitorsWithDeclaredEmployees2YearsAgo)
-	}
-	if numCompetitorsWithDeclaredEmployees3YearsAgo > 0 {
-		response.CompetitorsAverageEmployees3YearsAgo = response.CompetitorsAverageEmployees3YearsAgo / float64(numCompetitorsWithDeclaredEmployees3YearsAgo)
-	}
-
-	return &response, nil
+	return response, nil
 }
 	

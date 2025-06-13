@@ -223,15 +223,15 @@ func (s *CSVService) writeResultsToFile(businesses []*models.Business, nafCode s
 }
 
 // SearchBusinesses searches for businesses matching the given criteria
-func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string, write bool) ([]*models.Business, error) {
+func (s *CSVService) SearchBusinesses(geojsonStr string, nafCodes []string, write bool) ([]*models.Business, error) {
 	// Convert GeoJSON to geometry
 	geometry, err := s.convertGeoJSONToGeometry(geojsonStr)
 	if err != nil {
 		return nil, fmt.Errorf("error converting GeoJSON to geometry: %v", err)
 	}
 
-	// Load only businesses with matching NAF code
-	businesses, err := s.loadBusinessesByNAF(nafCode)
+	// Load only businesses with matching NAF codes
+	businesses, err := s.loadBusinessesByNAF(nafCodes)
 	if err != nil {
 		return nil, fmt.Errorf("error loading businesses: %v", err)
 	}
@@ -244,7 +244,7 @@ func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string, write b
 
 	// Write results to file
 	if write {
-		if err := s.writeResultsToFile(results, nafCode); err != nil {
+		if err := s.writeResultsToFile(results, strings.Join(nafCodes, "_")); err != nil {
 			log.Printf("Warning: error writing results to file: %v", err)
 		}
 	}
@@ -252,8 +252,8 @@ func (s *CSVService) SearchBusinesses(geojsonStr string, nafCode string, write b
 	return results, nil
 }
 
-// loadBusinessesByNAF loads only businesses with the given NAF code
-func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, error) {
+// loadBusinessesByNAF loads only businesses with any of the given NAF codes
+func (s *CSVService) loadBusinessesByNAF(nafCodes []string) ([]*models.Business, error) {
 	file, err := os.Open(s.businessFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("error opening CSV file: %v", err)
@@ -280,6 +280,12 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 	var address strings.Builder
 	address.Grow(200)
 
+	// Create a map for faster NAF code lookups
+	nafCodeMap := make(map[string]bool)
+	for _, code := range nafCodes {
+		nafCodeMap[code] = true
+	}
+
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
@@ -295,12 +301,12 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 
 		// Parse NAF code first to filter early
 		recordNAFCode := record[len(record)-5]
-		if recordNAFCode != nafCode {
+		if !nafCodeMap[recordNAFCode] {
 			continue
 		}
 
 		// Parse business name
-		businessName := record[0]
+		businessName := record[len(record)-6]
 		if businessName == "" {
 			continue
 		}
@@ -363,7 +369,7 @@ func (s *CSVService) loadBusinessesByNAF(nafCode string) ([]*models.Business, er
 
 		businesses = append(businesses, business)
 	}
-
+	
 	return businesses, nil
 }
 
@@ -1022,7 +1028,7 @@ func (s *CSVService) parseIrisRecord(record []string) *models.IrisData {
 	return iris
 }
 
-func (s *CSVService) GetCompetitionData(businesses []*models.Business) (*models.CompetitionResponse, error) {
+func (s *CSVService) GetCompetitionData(businesses []*models.Business) (*models.CompetitionResponseByNAF, error) {
 	if err := s.competitionService.doLoadCompetitionData(businesses); err != nil {
 		return nil, err
 	}
