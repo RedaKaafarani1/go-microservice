@@ -409,4 +409,5 @@ type NAFCodeCompetitionResponse struct {
 // CompetitionResponseByNAF represents the response for the competition data endpoint grouped by NAF code
 type CompetitionResponseByNAF struct {
 	NAFCodes []NAFCodeCompetitionResponse `json:"naf_codes"`
+	Averages CompetitionResponse `json:"averages"`
 }

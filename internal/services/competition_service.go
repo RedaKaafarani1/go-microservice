@@ -214,7 +214,56 @@ func (s *CompetitionService) GetCompetitionData(businesses []*models.Business) (
 		NAFCodes: make([]models.NAFCodeCompetitionResponse, 0, len(businessesByNAF)),
 	}
 
-	// Process each NAF code group
+	// Variables to track totals for averages
+	totalNumCompetitorsWithAStatus := 0
+	totalNumCompetitorsWithBStatus := 0
+	totalNumCompetitorsWithCStatus := 0
+	totalNumCompetitorsWithDStatus := 0
+	totalNumCompetitorsWithEStatus := 0
+	totalCompetitorsAverageCALastYear := 0.0
+	totalCompetitorsAverageCA2YearsAgo := 0.0
+	totalCompetitorsAverageCA3YearsAgo := 0.0
+	totalCompetitorsAverageRevenueLastYear := 0.0
+	totalCompetitorsAverageEmployeesLastYear := 0
+	totalCompetitorsAverageRevenue2YearsAgo := 0.0
+	totalCompetitorsAverageEmployees2YearsAgo := 0
+	totalCompetitorsAverageRevenue3YearsAgo := 0.0
+	totalCompetitorsAverageEmployees3YearsAgo := 0
+	totalPercentageCompetitorsWithDeclaredCALastYear := 0.0
+	totalPercentageCompetitorsWithDeclaredCA2YearsAgo := 0.0
+	totalPercentageCompetitorsWithDeclaredCA3YearsAgo := 0.0
+	totalPercentageCompetitorsWithDeclaredRevenueLastYear := 0.0
+	totalPercentageCompetitorsWithDeclaredEmployeesLastYear := 0.0
+	totalPercentageCompetitorsWithDeclaredRevenue2YearsAgo := 0.0
+	totalPercentageCompetitorsWithDeclaredEmployees2YearsAgo := 0.0
+	totalPercentageCompetitorsWithDeclaredRevenue3YearsAgo := 0.0
+	totalPercentageCompetitorsWithDeclaredEmployees3YearsAgo := 0.0
+	totalCAArrayLastYear := []float64{}
+	totalCAArray2YearsAgo := []float64{}
+	totalCAArray3YearsAgo := []float64{}
+	totalRevenueArrayLastYear := []float64{}
+	totalRevenueArray2YearsAgo := []float64{}
+	totalRevenueArray3YearsAgo := []float64{}
+	totalEmployeesArrayLastYear := []float64{}
+	totalEmployeesArray2YearsAgo := []float64{}
+	totalEmployeesArray3YearsAgo := []float64{}
+	totalNumCompetitorsWithConsistentIncrease := 0.0
+	totalNumCompetitorsWithConsistentDecrease := 0.0
+	totalNumCompetitorsWithMixedTrend := 0.0
+	totalOldDataUsed := false
+
+	totalNumCompetitorsWithDeclaredRevenueLastYear := 0
+	totalNumCompetitorsWithDeclaredRevenue2YearsAgo := 0
+	totalNumCompetitorsWithDeclaredRevenue3YearsAgo := 0
+	totalNumCompetitorsWithDeclaredEmployeesLastYear := 0
+	totalNumCompetitorsWithDeclaredEmployees2YearsAgo := 0
+	totalNumCompetitorsWithDeclaredEmployees3YearsAgo := 0
+	totalNumCompetitorsWithDeclaredCALastYear := 0
+	totalNumCompetitorsWithDeclaredCA2YearsAgo := 0
+	totalNumCompetitorsWithDeclaredCA3YearsAgo := 0
+	totalNumCompetitors := len(businesses)
+
+	// Process each NAF code group that has businesses
 	for nafCode, nafBusinesses := range businessesByNAF {
 		// Create competitors list for this NAF code
 		competitors := make([]models.CompetitorsData, 0, len(nafBusinesses))
@@ -424,6 +473,47 @@ func (s *CompetitionService) GetCompetitionData(businesses []*models.Business) (
 			}
 		}
 
+		// Add to totals for averages
+		totalNumCompetitorsWithAStatus += stats.NumCompetitorsWithAStatus
+		totalNumCompetitorsWithBStatus += stats.NumCompetitorsWithBStatus
+		totalNumCompetitorsWithCStatus += stats.NumCompetitorsWithCStatus
+		totalNumCompetitorsWithDStatus += stats.NumCompetitorsWithDStatus
+		totalNumCompetitorsWithEStatus += stats.NumCompetitorsWithEStatus
+		totalCompetitorsAverageCALastYear += stats.CompetitorsAverageCALastYear
+		totalCompetitorsAverageCA2YearsAgo += stats.CompetitorsAverageCA2YearsAgo
+		totalCompetitorsAverageCA3YearsAgo += stats.CompetitorsAverageCA3YearsAgo
+		totalCompetitorsAverageRevenueLastYear += stats.CompetitorsAverageRevenueLastYear
+		totalCompetitorsAverageEmployeesLastYear += stats.CompetitorsAverageEmployeesLastYear
+		totalCompetitorsAverageRevenue2YearsAgo += stats.CompetitorsAverageRevenue2YearsAgo
+		totalCompetitorsAverageEmployees2YearsAgo += stats.CompetitorsAverageEmployees2YearsAgo
+		totalCompetitorsAverageRevenue3YearsAgo += stats.CompetitorsAverageRevenue3YearsAgo
+		totalCompetitorsAverageEmployees3YearsAgo += stats.CompetitorsAverageEmployees3YearsAgo
+		totalNumCompetitorsWithConsistentIncrease += float64(stats.NumCompetitorsWithConsistentIncrease)
+		totalNumCompetitorsWithConsistentDecrease += float64(stats.NumCompetitorsWithConsistentDecrease)
+		totalNumCompetitorsWithMixedTrend += float64(stats.NumCompetitorsWithMixedTrend)
+		totalOldDataUsed = totalOldDataUsed || stats.OldDataUsed
+
+		totalCAArrayLastYear = append(totalCAArrayLastYear, stats.CAArrayLastYear...)
+		totalCAArray2YearsAgo = append(totalCAArray2YearsAgo, stats.CAArray2YearsAgo...)
+		totalCAArray3YearsAgo = append(totalCAArray3YearsAgo, stats.CAArray3YearsAgo...)
+		totalRevenueArrayLastYear = append(totalRevenueArrayLastYear, stats.RevenueArrayLastYear...)
+		totalRevenueArray2YearsAgo = append(totalRevenueArray2YearsAgo, stats.RevenueArray2YearsAgo...)
+		totalRevenueArray3YearsAgo = append(totalRevenueArray3YearsAgo, stats.RevenueArray3YearsAgo...)
+		totalEmployeesArrayLastYear = append(totalEmployeesArrayLastYear, stats.EmployeesArrayLastYear...)
+		totalEmployeesArray2YearsAgo = append(totalEmployeesArray2YearsAgo, stats.EmployeesArray2YearsAgo...)
+		totalEmployeesArray3YearsAgo = append(totalEmployeesArray3YearsAgo, stats.EmployeesArray3YearsAgo...)
+
+		totalNumCompetitorsWithDeclaredRevenueLastYear += numCompetitorsWithDeclaredRevenueLastYear
+		totalNumCompetitorsWithDeclaredRevenue2YearsAgo += numCompetitorsWithDeclaredRevenue2YearsAgo
+		totalNumCompetitorsWithDeclaredRevenue3YearsAgo += numCompetitorsWithDeclaredRevenue3YearsAgo
+		totalNumCompetitorsWithDeclaredEmployeesLastYear += numCompetitorsWithDeclaredEmployeesLastYear
+		totalNumCompetitorsWithDeclaredEmployees2YearsAgo += numCompetitorsWithDeclaredEmployees2YearsAgo
+		totalNumCompetitorsWithDeclaredEmployees3YearsAgo += numCompetitorsWithDeclaredEmployees3YearsAgo
+		totalNumCompetitorsWithDeclaredCALastYear += numCompetitorsWithDeclaredCALastYear
+		totalNumCompetitorsWithDeclaredCA2YearsAgo += numCompetitorsWithDeclaredCA2YearsAgo
+		totalNumCompetitorsWithDeclaredCA3YearsAgo += numCompetitorsWithDeclaredCA3YearsAgo
+		totalNumCompetitors += numCompetitors
+
 		// Calculate percentages and averages
 		if numCompetitors > 0 {
 			stats.PercentageCompetitorsWithDeclaredCALastYear = float64(numCompetitorsWithDeclaredCALastYear) / float64(numCompetitors) * 100
@@ -474,6 +564,86 @@ func (s *CompetitionService) GetCompetitionData(businesses []*models.Business) (
 			Competitors:       competitors,
 			CompetitionStats:  stats,
 		})
+	}
+
+	
+	if (totalNumCompetitors > 0) {
+		totalPercentageCompetitorsWithDeclaredCALastYear = float64(totalNumCompetitorsWithDeclaredCALastYear) / float64(totalNumCompetitors) * 100
+		totalPercentageCompetitorsWithDeclaredCA2YearsAgo = float64(totalNumCompetitorsWithDeclaredCA2YearsAgo) / float64(totalNumCompetitors) * 100
+		totalPercentageCompetitorsWithDeclaredCA3YearsAgo = float64(totalNumCompetitorsWithDeclaredCA3YearsAgo) / float64(totalNumCompetitors) * 100
+		totalPercentageCompetitorsWithDeclaredRevenueLastYear = float64(totalNumCompetitorsWithDeclaredRevenueLastYear) / float64(totalNumCompetitors) * 100
+		totalPercentageCompetitorsWithDeclaredEmployeesLastYear = float64(totalNumCompetitorsWithDeclaredEmployeesLastYear) / float64(totalNumCompetitors) * 100
+		totalPercentageCompetitorsWithDeclaredRevenue2YearsAgo = float64(totalNumCompetitorsWithDeclaredRevenue2YearsAgo) / float64(totalNumCompetitors) * 100
+		totalPercentageCompetitorsWithDeclaredEmployees2YearsAgo = float64(totalNumCompetitorsWithDeclaredEmployees2YearsAgo) / float64(totalNumCompetitors) * 100
+		totalPercentageCompetitorsWithDeclaredRevenue3YearsAgo = float64(totalNumCompetitorsWithDeclaredRevenue3YearsAgo) / float64(totalNumCompetitors) * 100
+		totalPercentageCompetitorsWithDeclaredEmployees3YearsAgo = float64(totalNumCompetitorsWithDeclaredEmployees3YearsAgo) / float64(totalNumCompetitors) * 100
+	}
+
+	if (totalNumCompetitorsWithDeclaredCALastYear > 0) {
+		totalCompetitorsAverageCALastYear = math.Round(float64(totalCompetitorsAverageCALastYear) / float64(totalNumCompetitorsWithDeclaredCALastYear))
+	}
+	if (totalNumCompetitorsWithDeclaredCA2YearsAgo > 0) {
+		totalCompetitorsAverageCA2YearsAgo = math.Round(float64(totalCompetitorsAverageCA2YearsAgo) / float64(totalNumCompetitorsWithDeclaredCA2YearsAgo))
+	}
+	if (totalNumCompetitorsWithDeclaredCA3YearsAgo > 0) {
+		totalCompetitorsAverageCA3YearsAgo = math.Round(float64(totalCompetitorsAverageCA3YearsAgo) / float64(totalNumCompetitorsWithDeclaredCA3YearsAgo))
+	}
+	if (totalNumCompetitorsWithDeclaredRevenueLastYear > 0) {
+		totalCompetitorsAverageRevenueLastYear = math.Round(float64(totalCompetitorsAverageRevenueLastYear) / float64(totalNumCompetitorsWithDeclaredRevenueLastYear))
+	}
+	if (totalNumCompetitorsWithDeclaredRevenue2YearsAgo > 0) {
+		totalCompetitorsAverageRevenue2YearsAgo = math.Round(float64(totalCompetitorsAverageRevenue2YearsAgo) / float64(totalNumCompetitorsWithDeclaredRevenue2YearsAgo))
+	}
+	if (totalNumCompetitorsWithDeclaredRevenue3YearsAgo > 0) {
+		totalCompetitorsAverageRevenue3YearsAgo = math.Round(float64(totalCompetitorsAverageRevenue3YearsAgo) / float64(totalNumCompetitorsWithDeclaredRevenue3YearsAgo))
+	}
+	if (totalNumCompetitorsWithDeclaredEmployeesLastYear > 0) {
+		totalCompetitorsAverageEmployeesLastYear = int(math.Round(float64(totalCompetitorsAverageEmployeesLastYear) / float64(totalNumCompetitorsWithDeclaredEmployeesLastYear)))
+	}
+	if (totalNumCompetitorsWithDeclaredEmployees2YearsAgo > 0) {
+		totalCompetitorsAverageEmployees2YearsAgo = int(math.Round(float64(totalCompetitorsAverageEmployees2YearsAgo) / float64(totalNumCompetitorsWithDeclaredEmployees2YearsAgo)))
+	}
+	if (totalNumCompetitorsWithDeclaredEmployees3YearsAgo > 0) {
+		totalCompetitorsAverageEmployees3YearsAgo = int(math.Round(float64(totalCompetitorsAverageEmployees3YearsAgo) / float64(totalNumCompetitorsWithDeclaredEmployees3YearsAgo)))
+	}
+
+	response.Averages = models.CompetitionResponse{
+		NumCompetitorsWithAStatus: totalNumCompetitorsWithAStatus,
+		NumCompetitorsWithBStatus: totalNumCompetitorsWithBStatus,
+		NumCompetitorsWithCStatus: totalNumCompetitorsWithCStatus,
+		NumCompetitorsWithDStatus: totalNumCompetitorsWithDStatus,
+		NumCompetitorsWithEStatus: totalNumCompetitorsWithEStatus,
+		CompetitorsAverageCALastYear: totalCompetitorsAverageCALastYear,
+		CompetitorsAverageCA2YearsAgo: totalCompetitorsAverageCA2YearsAgo,
+		CompetitorsAverageCA3YearsAgo: totalCompetitorsAverageCA3YearsAgo,
+		CompetitorsAverageRevenueLastYear: totalCompetitorsAverageRevenueLastYear,
+		CompetitorsAverageEmployeesLastYear: totalCompetitorsAverageEmployeesLastYear,
+		CompetitorsAverageRevenue2YearsAgo: totalCompetitorsAverageRevenue2YearsAgo,
+		CompetitorsAverageEmployees2YearsAgo: totalCompetitorsAverageEmployees2YearsAgo,
+		CompetitorsAverageRevenue3YearsAgo: totalCompetitorsAverageRevenue3YearsAgo,
+		CompetitorsAverageEmployees3YearsAgo: totalCompetitorsAverageEmployees3YearsAgo,
+		PercentageCompetitorsWithDeclaredCALastYear: totalPercentageCompetitorsWithDeclaredCALastYear,
+		PercentageCompetitorsWithDeclaredCA2YearsAgo: totalPercentageCompetitorsWithDeclaredCA2YearsAgo,
+		PercentageCompetitorsWithDeclaredCA3YearsAgo: totalPercentageCompetitorsWithDeclaredCA3YearsAgo,
+		PercentageCompetitorsWithDeclaredRevenueLastYear: totalPercentageCompetitorsWithDeclaredRevenueLastYear,
+		PercentageCompetitorsWithDeclaredEmployeesLastYear: totalPercentageCompetitorsWithDeclaredEmployeesLastYear,
+		PercentageCompetitorsWithDeclaredRevenue2YearsAgo: totalPercentageCompetitorsWithDeclaredRevenue2YearsAgo,
+		PercentageCompetitorsWithDeclaredEmployees2YearsAgo: totalPercentageCompetitorsWithDeclaredEmployees2YearsAgo,
+		PercentageCompetitorsWithDeclaredRevenue3YearsAgo: totalPercentageCompetitorsWithDeclaredRevenue3YearsAgo,
+		PercentageCompetitorsWithDeclaredEmployees3YearsAgo: totalPercentageCompetitorsWithDeclaredEmployees3YearsAgo,
+		CAArrayLastYear: totalCAArrayLastYear,
+		CAArray2YearsAgo: totalCAArray2YearsAgo,
+		CAArray3YearsAgo: totalCAArray3YearsAgo,
+		RevenueArrayLastYear: totalRevenueArrayLastYear,
+		RevenueArray2YearsAgo: totalRevenueArray2YearsAgo,
+		RevenueArray3YearsAgo: totalRevenueArray3YearsAgo,
+		EmployeesArrayLastYear: totalEmployeesArrayLastYear,
+		EmployeesArray2YearsAgo: totalEmployeesArray2YearsAgo,
+		EmployeesArray3YearsAgo: totalEmployeesArray3YearsAgo,
+		NumCompetitorsWithConsistentIncrease: totalNumCompetitorsWithConsistentIncrease,
+		NumCompetitorsWithConsistentDecrease: totalNumCompetitorsWithConsistentDecrease,
+		NumCompetitorsWithMixedTrend: totalNumCompetitorsWithMixedTrend,
+		OldDataUsed: totalOldDataUsed,
 	}
 
 	return response, nil
