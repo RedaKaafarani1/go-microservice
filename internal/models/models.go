@@ -411,3 +411,48 @@ type CompetitionResponseByNAF struct {
 	NAFCodes []NAFCodeCompetitionResponse `json:"naf_codes"`
 	Averages CompetitionResponse `json:"averages"`
 }
+
+// BusinessData represents the competition data for a business
+type BusinessData struct {
+	Name               string
+	Siren             string
+	NIC               string
+	LegalStatus       string
+	CodeAPE           string
+	LabelAPE          string
+	Address           string
+	PostalCode        string
+	City              string
+	NumDepartment     string
+	Department        string
+	Region            string
+	CodeGreffe        string
+	Greffe            string
+	RegistrationDate  string
+	DeregistrationDate string
+	Status            string
+	Latitude          float64
+	Longitude         float64
+	PublicationDate   string
+	Millesime1        string
+	DateCloseEx1      string
+	DurationEx1       string
+	CA1               string
+	Result1           string
+	Employees1        string
+	Millesime2        string
+	DateCloseEx2      string
+	DurationEx2       string
+	CA2               string
+	Result2           string
+	Employees2        string
+	Millesime3        string
+	DateCloseEx3      string
+	DurationEx3       string
+	CA3               string
+	Result3           string
+	Employees3        string
+	RangeCA1          string
+	RangeCA2          string
+	RangeCA3          string
+}
